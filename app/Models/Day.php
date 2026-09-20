@@ -11,6 +11,11 @@ class Day extends Model
         'date',
         'day_number',
         'notes',
+        'hidden_periods',
+    ];
+
+    protected $casts = [
+        'hidden_periods' => 'array',
     ];
 
     public function stay()
@@ -21,5 +26,10 @@ class Day extends Model
     public function activities()
     {
         return $this->hasMany(Activity::class)->orderBy('id');
+    }
+
+    public function blocks()
+    {
+        return $this->hasMany(DayBlock::class)->orderBy('position');
     }
 }

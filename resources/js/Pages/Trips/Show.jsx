@@ -1,11 +1,14 @@
 import React, { useState } from "react";
+
 import { Head, Link, router, useForm } from "@inertiajs/react";
+
 import GuestLayout from "@/Layouts/GuestLayout";
 import TripMap from "@/Components/TripMap";
 import StayCard from "@/Components/Itinerary/StayCard";
 import TransitionCard from "@/Components/Itinerary/TransitionCard";
 import LocationSearchInput from "@/Components/Itinerary/LocationSearchInput";
 import { formatDate } from "@/Utils/formatters";
+
 import {
     ArrowLeft,
     Plus,
@@ -17,18 +20,18 @@ import {
 } from "lucide-react";
 
 export default function Show({ trip }) {
-    // --- État pour l'ajout de séjour ---
     const [isAddingStay, setIsAddingStay] = useState(false);
     const [arrivalDate, setArrivalDate] = useState("");
     const [departureDate, setDepartureDate] = useState("");
+
     const [locationData, setLocationData] = useState({
         name: "",
         latitude: null,
         longitude: null,
     });
 
-    // --- État et Formulaire pour l'édition du voyage ---
     const [isEditingTrip, setIsEditingTrip] = useState(false);
+
     const editTripForm = useForm({
         title: trip.title || "",
         description: trip.description || "",
@@ -36,8 +39,8 @@ export default function Show({ trip }) {
         end_date: trip.end_date || "",
     });
 
-    // --- État et Formulaire pour l'édition d'un séjour (Inertia useForm) ---
     const [editingStay, setEditingStay] = useState(null);
+
     const editStayForm = useForm({
         location_name: "",
         latitude: null,
@@ -46,7 +49,6 @@ export default function Show({ trip }) {
         departure_date: "",
     });
 
-    // --- Actions : Voyage ---
     const handleOpenEditTrip = () => {
         editTripForm.setData({
             title: trip.title || "",
@@ -54,17 +56,18 @@ export default function Show({ trip }) {
             start_date: trip.start_date || "",
             end_date: trip.end_date || "",
         });
+
         setIsEditingTrip(true);
     };
 
     const handleUpdateTrip = (e) => {
         e.preventDefault();
+
         editTripForm.put(route("trips.update", trip.id), {
             onSuccess: () => setIsEditingTrip(false),
         });
     };
 
-    // --- Actions : Ajout de séjour ---
     const handleOpenAddStay = () => {
         setArrivalDate(trip.start_date || "");
         setDepartureDate(trip.end_date || "");
@@ -93,11 +96,13 @@ export default function Show({ trip }) {
             {
                 onSuccess: () => {
                     setIsAddingStay(false);
+
                     setLocationData({
                         name: "",
                         latitude: null,
                         longitude: null,
                     });
+
                     setArrivalDate("");
                     setDepartureDate("");
                 },
@@ -105,9 +110,9 @@ export default function Show({ trip }) {
         );
     };
 
-    // --- Actions : Édition de séjour ---
     const handleOpenEditStay = (stay) => {
         setEditingStay(stay);
+
         editStayForm.setData({
             location_name: stay.location_name || "",
             latitude: stay.latitude || null,
@@ -150,13 +155,15 @@ export default function Show({ trip }) {
                             href={route("trips.index")}
                             className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition mb-3"
                         >
-                            <ArrowLeft className="w-4 h-4" /> Retour à la liste
+                            <ArrowLeft className="w-4 h-4" />
+                            Retour à la liste
                         </Link>
 
                         <div className="flex items-center gap-3">
                             <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">
                                 {trip.title}
                             </h1>
+
                             <button
                                 onClick={handleOpenEditTrip}
                                 title="Modifier le voyage"
@@ -171,9 +178,11 @@ export default function Show({ trip }) {
                                 {trip.description}
                             </p>
                         )}
+
                         {(trip.start_date || trip.end_date) && (
                             <div className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 px-3 py-1.5 rounded-lg">
                                 <Calendar className="w-3.5 h-3.5 text-slate-500" />
+
                                 <span>
                                     Du {formatDate(trip.start_date)} au{" "}
                                     {formatDate(trip.end_date)}
@@ -186,7 +195,8 @@ export default function Show({ trip }) {
                         onClick={handleOpenAddStay}
                         className="bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-sm font-bold px-5 py-3 rounded-xl shadow-md flex items-center gap-2 transition shrink-0"
                     >
-                        <Plus className="w-5 h-5" /> Ajouter un séjour
+                        <Plus className="w-5 h-5" />
+                        Ajouter un séjour
                     </button>
                 </div>
 
@@ -213,6 +223,7 @@ export default function Show({ trip }) {
                                         stay={stay}
                                         onEdit={() => handleOpenEditStay(stay)}
                                     />
+
                                     {transition && (
                                         <TransitionCard
                                             transition={transition}
@@ -224,19 +235,22 @@ export default function Show({ trip }) {
                     ) : (
                         <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700">
                             <MapPin className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+
                             <h3 className="text-base font-semibold text-slate-700 dark:text-slate-200">
                                 Aucun séjour planifié
                             </h3>
+
                             <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
                                 Commencez à construire votre itinéraire en
                                 ajoutant votre première destination.
                             </p>
+
                             <button
                                 onClick={handleOpenAddStay}
                                 className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
                             >
-                                <Plus className="w-4 h-4" /> Ajouter une
-                                destination
+                                <Plus className="w-4 h-4" />
+                                Ajouter une destination
                             </button>
                         </div>
                     )}
@@ -252,16 +266,19 @@ export default function Show({ trip }) {
                                 <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-xl">
                                     <Settings className="w-6 h-6" />
                                 </div>
+
                                 <div>
                                     <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                                         Paramètres du voyage
                                     </h3>
+
                                     <p className="text-xs text-slate-500 dark:text-slate-400">
                                         Modifiez le titre, la description et les
                                         dates globales.
                                     </p>
                                 </div>
                             </div>
+
                             <button
                                 onClick={() => setIsEditingTrip(false)}
                                 className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
@@ -275,6 +292,7 @@ export default function Show({ trip }) {
                                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
                                     Titre du voyage
                                 </label>
+
                                 <input
                                     type="text"
                                     value={editTripForm.data.title}
@@ -293,6 +311,7 @@ export default function Show({ trip }) {
                                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
                                     Description
                                 </label>
+
                                 <textarea
                                     value={editTripForm.data.description}
                                     onChange={(e) =>
@@ -311,6 +330,7 @@ export default function Show({ trip }) {
                                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
                                         Date de début
                                     </label>
+
                                     <input
                                         type="date"
                                         value={editTripForm.data.start_date}
@@ -324,10 +344,12 @@ export default function Show({ trip }) {
                                         required
                                     />
                                 </div>
+
                                 <div>
                                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
                                         Date de fin
                                     </label>
+
                                     <input
                                         type="date"
                                         value={editTripForm.data.end_date}
@@ -351,6 +373,7 @@ export default function Show({ trip }) {
                                 >
                                     Annuler
                                 </button>
+
                                 <button
                                     type="submit"
                                     disabled={editTripForm.processing}
@@ -373,16 +396,19 @@ export default function Show({ trip }) {
                                 <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-xl">
                                     <Edit3 className="w-6 h-6" />
                                 </div>
+
                                 <div>
                                     <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                                         Modifier le séjour
                                     </h3>
+
                                     <p className="text-xs text-slate-500 dark:text-slate-400">
                                         Mettez à jour le lieu ou les dates de
                                         cette étape.
                                     </p>
                                 </div>
                             </div>
+
                             <button
                                 onClick={handleCloseEditStay}
                                 className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
@@ -396,6 +422,7 @@ export default function Show({ trip }) {
                                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
                                     Destination / Adresse
                                 </label>
+
                                 <LocationSearchInput
                                     value={editStayForm.data.location_name}
                                     onChange={(val) =>
@@ -413,6 +440,7 @@ export default function Show({ trip }) {
                                         });
                                     }}
                                 />
+
                                 {editStayForm.errors.location_name && (
                                     <p className="text-red-500 text-xs mt-1">
                                         {editStayForm.errors.location_name}
@@ -425,6 +453,7 @@ export default function Show({ trip }) {
                                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
                                         Date d'arrivée
                                     </label>
+
                                     <input
                                         type="date"
                                         value={editStayForm.data.arrival_date}
@@ -439,16 +468,19 @@ export default function Show({ trip }) {
                                         className="w-full text-sm rounded-xl border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-indigo-500"
                                         required
                                     />
+
                                     {editStayForm.errors.arrival_date && (
                                         <p className="text-red-500 text-xs mt-1">
                                             {editStayForm.errors.arrival_date}
                                         </p>
                                     )}
                                 </div>
+
                                 <div>
                                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
                                         Date de départ
                                     </label>
+
                                     <input
                                         type="date"
                                         value={editStayForm.data.departure_date}
@@ -467,6 +499,7 @@ export default function Show({ trip }) {
                                         className="w-full text-sm rounded-xl border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-indigo-500"
                                         required
                                     />
+
                                     {editStayForm.errors.departure_date && (
                                         <p className="text-red-500 text-xs mt-1">
                                             {editStayForm.errors.departure_date}
@@ -483,6 +516,7 @@ export default function Show({ trip }) {
                                 >
                                     Annuler
                                 </button>
+
                                 <button
                                     type="submit"
                                     disabled={
@@ -510,16 +544,19 @@ export default function Show({ trip }) {
                                 <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-xl">
                                     <MapPin className="w-6 h-6" />
                                 </div>
+
                                 <div>
                                     <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                                         Nouveau séjour
                                     </h3>
+
                                     <p className="text-xs text-slate-500 dark:text-slate-400">
                                         Recherchez une ville ou un lieu pour
                                         calculer l'itinéraire.
                                     </p>
                                 </div>
                             </div>
+
                             <button
                                 onClick={() => setIsAddingStay(false)}
                                 className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
@@ -533,6 +570,7 @@ export default function Show({ trip }) {
                                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
                                     Destination / Adresse
                                 </label>
+
                                 <LocationSearchInput
                                     value={locationData.name}
                                     onChange={(val) =>
@@ -552,6 +590,7 @@ export default function Show({ trip }) {
                                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
                                         Date d'arrivée
                                     </label>
+
                                     <input
                                         type="date"
                                         value={arrivalDate}
@@ -564,10 +603,12 @@ export default function Show({ trip }) {
                                         required
                                     />
                                 </div>
+
                                 <div>
                                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
                                         Date de départ
                                     </label>
+
                                     <input
                                         type="date"
                                         value={departureDate}
@@ -594,6 +635,7 @@ export default function Show({ trip }) {
                                 >
                                     Annuler
                                 </button>
+
                                 <button
                                     type="submit"
                                     disabled={!locationData.latitude}

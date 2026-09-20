@@ -33,7 +33,7 @@ class TripController extends Controller
 
     public function show(Trip $trip)
     {
-        $trip->load(['stays.days.activities', 'transitions']);
+        $trip->load(['stays.days.activities', 'stays.days.blocks', 'transitions']);
 
         return Inertia::render('Trips/Show', [
             'trip' => $trip,

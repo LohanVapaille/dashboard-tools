@@ -5,6 +5,8 @@ use App\Http\Controllers\TripController;
 use App\Http\Controllers\StayController;
 use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\StayTransitionController;
+use App\Http\Controllers\DayBlockController;
+use App\Http\Controllers\DayPeriodController;
 
 Route::get('/', function () {
     return redirect()->route('trips.index');
@@ -29,3 +31,17 @@ Route::delete('/activities/{activity}', [ActivityController::class, 'destroy'])-
 Route::post('/trips/{trip}/transitions', [StayTransitionController::class, 'store'])->name('transitions.store');
 Route::delete('/transitions/{transition}', [StayTransitionController::class, 'destroy'])->name('transitions.destroy');
 
+// Routes Blocs de Jour
+Route::post('/days/{day}/day-blocks', [DayBlockController::class, 'store'])->name('day-blocks.store');
+Route::patch('/day-blocks/{dayBlock}', [DayBlockController::class, 'update'])->name('day-blocks.update');
+Route::delete('/day-blocks/{dayBlock}', [DayBlockController::class, 'destroy'])->name('day-blocks.destroy');
+
+// Routes pour afficher un bloc de jour spécifique (optionnel)
+Route::get('/day-blocks/{dayBlock}', [DayBlockController::class, 'show'])->name('day-blocks.show');
+
+
+
+Route::post('/days/{day}/blocks', [DayBlockController::class, 'store'])->name('day-blocks.store');
+Route::patch('/day-blocks/{dayBlock}', [DayBlockController::class, 'update'])->name('day-blocks.update');
+Route::delete('/day-blocks/{dayBlock}', [DayBlockController::class, 'destroy'])->name('day-blocks.destroy');
+Route::patch('/days/{day}/periods', [DayPeriodController::class, 'update'])->name('day-periods.update');
