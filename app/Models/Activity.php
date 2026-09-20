@@ -6,7 +6,16 @@ use Illuminate\Database\Eloquent\Model;
 
 class Activity extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'day_id',
+        'title',
+        'description',
+        'location_name',
+        'latitude',
+        'longitude',
+        'time',
+        'notes',
+    ];
 
     public function day()
     {
