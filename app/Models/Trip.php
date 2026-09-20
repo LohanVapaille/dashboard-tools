@@ -6,12 +6,18 @@ use Illuminate\Database\Eloquent\Model;
 
 class Trip extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'title',
+        'description',
+        'start_date',
+        'end_date',
+    ];
 
     public function stays()
     {
-        return $this->hasMany(Stay::class)->orderBy('order_index');
+        return $this->hasMany(Stay::class)->orderBy('arrival_date');
     }
+
     public function transitions()
     {
         return $this->hasMany(StayTransition::class);

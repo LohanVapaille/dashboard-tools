@@ -1,34 +1,31 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
-use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 use App\Http\Controllers\TripController;
+use App\Http\Controllers\StayController;
+use App\Http\Controllers\ActivityController;
+use App\Http\Controllers\StayTransitionController;
 
 Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'canLogin' => Route::has('login'),
-        'canRegister' => Route::has('register'),
-        'laravelVersion' => Application::VERSION,
-        'phpVersion' => PHP_VERSION,
-    ]);
+    return redirect()->route('trips.index');
 });
 
 Route::get('/dashboard', function () {
-    return Inertia::render('Dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+    return redirect()->route('trips.index');
+})->name('dashboard');
 
-Route::middleware('auth')->group(function () {
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-});
+// Routes Voyages
+Route::resource('trips', TripController::class);
 
-require __DIR__ . '/auth.php';
+// Routes Séjours
+Route::post('/trips/{trip}/stays', [StayController::class, 'store'])->name('stays.store');
+Route::delete('/stays/{stay}', [StayController::class, 'destroy'])->name('stays.destroy');
 
+// Routes Activités
+Route::post('/days/{day}/activities', [ActivityController::class, 'store'])->name('activities.store');
+Route::delete('/activities/{activity}', [ActivityController::class, 'destroy'])->name('activities.destroy');
 
+// Routes Transitions
+Route::post('/trips/{trip}/transitions', [StayTransitionController::class, 'store'])->name('transitions.store');
+Route::delete('/transitions/{transition}', [StayTransitionController::class, 'destroy'])->name('transitions.destroy');
 
-Route::middleware(['auth', 'verified'])->group(function () {
-    Route::resource('trips', TripController::class);
-});

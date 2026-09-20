@@ -1,3 +1,14 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Empêche les éléments Leaflet de passer au-dessus des fenêtres modales */
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom {
+    z-index: 10 !important;
+}
+
+.leaflet-control {
+    z-index: 20 !important;
+}
