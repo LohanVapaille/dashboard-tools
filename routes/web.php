@@ -45,3 +45,4 @@ Route::post('/days/{day}/blocks', [DayBlockController::class, 'store'])->name('d
 Route::patch('/day-blocks/{dayBlock}', [DayBlockController::class, 'update'])->name('day-blocks.update');
 Route::delete('/day-blocks/{dayBlock}', [DayBlockController::class, 'destroy'])->name('day-blocks.destroy');
 Route::patch('/days/{day}/periods', [DayPeriodController::class, 'update'])->name('day-periods.update');
+Route::put('/stays/{stay}', [StayController::class, 'update'])->name('stays.update');

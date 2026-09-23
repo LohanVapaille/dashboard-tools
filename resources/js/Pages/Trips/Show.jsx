@@ -1,14 +1,11 @@
 import React, { useState } from "react";
-
 import { Head, Link, router, useForm } from "@inertiajs/react";
-
 import GuestLayout from "@/Layouts/GuestLayout";
 import TripMap from "@/Components/TripMap";
 import StayCard from "@/Components/Itinerary/StayCard";
 import TransitionCard from "@/Components/Itinerary/TransitionCard";
 import LocationSearchInput from "@/Components/Itinerary/LocationSearchInput";
 import { formatDate } from "@/Utils/formatters";
-
 import {
     ArrowLeft,
     Plus,
@@ -149,7 +146,16 @@ export default function Show({ trip }) {
 
             <div className="py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
                 {/* En-tête principal */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                    {/* Bouton réglages discret, en haut à droite de la carte */}
+                    <button
+                        onClick={handleOpenEditTrip}
+                        title="Modifier le voyage"
+                        className="absolute top-4 right-4 p-1.5 text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-lg transition"
+                    >
+                        <Settings className="w-4 h-4" />
+                    </button>
+
                     <div>
                         <Link
                             href={route("trips.index")}
@@ -159,19 +165,9 @@ export default function Show({ trip }) {
                             Retour à la liste
                         </Link>
 
-                        <div className="flex items-center gap-3">
-                            <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">
-                                {trip.title}
-                            </h1>
-
-                            <button
-                                onClick={handleOpenEditTrip}
-                                title="Modifier le voyage"
-                                className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition"
-                            >
-                                <Settings className="w-5 h-5" />
-                            </button>
-                        </div>
+                        <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+                            {trip.title}
+                        </h1>
 
                         {trip.description && (
                             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -210,9 +206,8 @@ export default function Show({ trip }) {
                     <h2 className="text-xl font-bold text-slate-900 dark:text-white px-1">
                         Programme du voyage
                     </h2>
-
                     {trip.stays && trip.stays.length > 0 ? (
-                        trip.stays.map((stay) => {
+                        trip.stays.map((stay, index) => {
                             const transition = trip.transitions?.find(
                                 (t) => t.from_stay_id === stay.id,
                             );
@@ -221,9 +216,9 @@ export default function Show({ trip }) {
                                 <React.Fragment key={stay.id}>
                                     <StayCard
                                         stay={stay}
+                                        index={index}
                                         onEdit={() => handleOpenEditStay(stay)}
                                     />
-
                                     {transition && (
                                         <TransitionCard
                                             transition={transition}

@@ -15,8 +15,17 @@ import DayBlockItem from "./DayBlockItem";
 import { BLOCK_TYPES } from "@/Constants/dayBlocks";
 import { formatDate } from "@/Utils/formatters";
 
-// Ordre chronologique fixe : les parties affichées suivent toujours cet ordre,
-// quel que soit l'ordre dans lequel on les ajoute.
+// Palette de couleurs pour la bordure gauche de chaque jour
+const DAY_BORDER_COLORS = [
+    "border-l-indigo-500",
+    "border-l-emerald-500",
+    "border-l-amber-500",
+    "border-l-rose-500",
+    "border-l-cyan-500",
+    "border-l-purple-500",
+    "border-l-orange-500",
+];
+
 const PERIODS = [
     { key: "matin", label: "Matin", Icon: Sunrise },
     { key: "midi", label: "Midi", Icon: Sun },
@@ -25,7 +34,7 @@ const PERIODS = [
     { key: "nuit", label: "Nuit", Icon: Moon },
 ];
 
-export default function DayCard({ day, dayNumber }) {
+export default function DayCard({ day, dayNumber, dayIndex = 0 }) {
     const [showMenu, setShowMenu] = useState(false);
 
     const hiddenPeriods = day.hidden_periods || [];
@@ -33,6 +42,10 @@ export default function DayCard({ day, dayNumber }) {
     const visiblePeriods = PERIODS.filter(
         (p) => !hiddenPeriods.includes(p.key),
     );
+
+    // Sélectionne une couleur unique basée sur l'index du jour
+    const borderColorClass =
+        DAY_BORDER_COLORS[dayIndex % DAY_BORDER_COLORS.length];
 
     const setPeriodHidden = (period, hidden) => {
         router.patch(
@@ -52,7 +65,7 @@ export default function DayCard({ day, dayNumber }) {
     };
 
     return (
-        <div className="border-l-2 border-indigo-500 pl-4 space-y-3">
+        <div className={`border-l-2 ${borderColorClass} pl-4 space-y-3`}>
             {/* En-tête de la journée + "+" pour composer la journée */}
             <div className="flex items-center justify-between gap-3">
                 <div className="font-bold text-sm text-slate-700 dark:text-slate-200">
@@ -74,15 +87,13 @@ export default function DayCard({ day, dayNumber }) {
 
                     {showMenu && (
                         <>
-                            {/* Clic en dehors = fermeture */}
                             <button
                                 aria-label="Fermer le menu"
                                 className="fixed inset-0 z-10 cursor-default"
                                 onClick={() => setShowMenu(false)}
                             />
 
-                            <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl z-20 py-2">
-                                {/* Parties de la journée : cases à cocher */}
+                            <div className="absolute z-20 right-0 mt-2 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl z-20 py-2">
                                 <div className="px-4 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                                     Parties de la journée
                                 </div>
@@ -118,7 +129,6 @@ export default function DayCard({ day, dayNumber }) {
                                     );
                                 })}
 
-                                {/* Boîtes libres */}
                                 <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
                                     <div className="px-4 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                                         Infos & outils
@@ -155,7 +165,7 @@ export default function DayCard({ day, dayNumber }) {
                 </div>
             </div>
 
-            {/* Parties de la journée affichées, toujours dans l'ordre chronologique */}
+            {/* Parties de la journée affichées */}
             {visiblePeriods.length > 0 ? (
                 <div className="flex flex-col md:flex-row gap-3">
                     {visiblePeriods.map(({ key, label }) => (
@@ -171,7 +181,7 @@ export default function DayCard({ day, dayNumber }) {
 
                             <button
                                 onClick={() => setPeriodHidden(key, true)}
-                                title={`Masquer « ${label} » (les activités sont conservées)`}
+                                title={`Masquer « ${label} »`}
                                 className="absolute -top-2 -right-2 z-10 w-6 h-6 rounded-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-400 hover:text-red-500 shadow-sm flex items-center justify-center transition-opacity md:opacity-0 md:group-hover:opacity-100 focus:opacity-100"
                             >
                                 <EyeOff className="w-3 h-3" />
@@ -186,7 +196,7 @@ export default function DayCard({ day, dayNumber }) {
                 </div>
             )}
 
-            {/* Boîtes libres : pense-bêtes, réservations, checklists, budget */}
+            {/* Boîtes libres */}
             {blocks.length > 0 && (
                 <div className="space-y-3 pt-2">
                     <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
