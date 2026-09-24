@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 use App\Models\Trip;
 use App\Models\TripUser;
@@ -11,9 +12,25 @@ use Inertia\Inertia;
 
 class TripController extends Controller
 {
-    public function index()
+    use AuthorizesRequests;
+    public function index(Request $request)
     {
-        $trips = Trip::withCount('stays')->orderBy('start_date', 'desc')->get();
+        $user = Auth::user();
+        $guestToken = $request->cookie('guest_token');
+
+        // On filtre pour que chaque utilisateur (ou invité) ne voie que ses propres voyages
+        $trips = Trip::withCount('stays')
+            ->when($user, function ($query, $user) {
+                // Si connecté : on récupère les voyages créés par l'utilisateur OU où il est participant via la table pivot
+                $query->where('user_id', $user->id)
+                    ->orWhereHas('users', fn($q) => $q->where('users.id', $user->id));
+            }, function ($query) use ($guestToken) {
+                // Si invité : on récupère via le guest_token du cookie
+                $query->where('guest_token', $guestToken)
+                    ->orWhereHas('tripUsers', fn($q) => $q->where('guest_token', $guestToken));
+            })
+            ->orderBy('start_date', 'desc')
+            ->get();
 
         return Inertia::render('Trips/Index', [
             'trips' => $trips,
@@ -37,11 +54,10 @@ class TripController extends Controller
         // Si l'utilisateur n'est ni connecté ni muni d'un guest_token, on en crée un
         if (!$user && !$guestToken) {
             $guestToken = (string) Str::uuid();
-            // On stocke le cookie pour 1 an
             cookie()->queue('guest_token', $guestToken, 60 * 24 * 365);
         }
 
-        // Création du voyage
+        // Création du voyage (Privé par défaut : is_private => true)
         $trip = Trip::create([
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
@@ -50,7 +66,8 @@ class TripController extends Controller
             'cover_image' => $validated['cover_image'] ?? null,
             'user_id' => $user?->id,
             'guest_token' => $user ? null : $guestToken,
-            'share_token' => Str::random(32), // Token unique pour le partage
+            'is_private' => true, // Privé par défaut
+            'share_token' => Str::random(32),
         ]);
 
         // Lier le créateur en tant qu'admin dans la table pivot trip_user
@@ -58,7 +75,7 @@ class TripController extends Controller
             'trip_id' => $trip->id,
             'user_id' => $user?->id,
             'guest_token' => $user ? null : $guestToken,
-            'role' => 'admin', // Le créateur est l'admin du voyage
+            'role' => 'admin',
         ]);
 
         return redirect()->route('trips.show', $trip->id);
@@ -66,6 +83,8 @@ class TripController extends Controller
 
     public function show(Trip $trip)
     {
+        $this->authorize('view', $trip);
+
         $trip->load(['stays.days.activities', 'stays.days.blocks', 'transitions']);
 
         return Inertia::render('Trips/Show', [
@@ -75,6 +94,8 @@ class TripController extends Controller
 
     public function update(Request $request, Trip $trip)
     {
+        $this->authorize('update', $trip);
+
         $validated = $request->validate([
             'title' => 'required|string|max:191',
             'description' => 'nullable|string',
@@ -89,14 +110,12 @@ class TripController extends Controller
 
     public function destroy(Trip $trip)
     {
+        $this->authorize('delete', $trip);
+
         $trip->delete();
 
         return redirect()->route('trips.index');
     }
-
-    // ==========================================
-    // NOUVELLES MÉTHODES : GESTION DU PARTAGE
-    // ==========================================
 
     public function join($share_token, Request $request)
     {
@@ -105,14 +124,12 @@ class TripController extends Controller
         $user = $request->user();
         $guestToken = $request->cookie('guest_token');
 
-        // Vérifier si l'utilisateur ou l'invité participe déjà au voyage
         $existingParticipation = TripUser::where('trip_id', $trip->id)
             ->when($user, fn($q) => $q->where('user_id', $user->id))
             ->when(!$user, fn($q) => $q->where('guest_token', $guestToken))
             ->first();
 
         if (!$existingParticipation) {
-            // Règle : Non inscrit = 'viewer' (Read-only), Inscrit = 'editor'
             $role = $user ? 'editor' : 'viewer';
 
             TripUser::create([
@@ -128,7 +145,8 @@ class TripController extends Controller
 
     public function generateShareLink(Trip $trip, Request $request)
     {
-        // S'assurer que le voyage a bien un share_token
+        $this->authorize('update', $trip);
+
         if (!$trip->share_token) {
             $trip->share_token = Str::random(32);
             $trip->save();

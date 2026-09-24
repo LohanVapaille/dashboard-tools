@@ -8,7 +8,6 @@ use App\Http\Controllers\StayTransitionController;
 use App\Http\Controllers\DayBlockController;
 use App\Http\Controllers\DayPeriodController;
 use App\Http\Controllers\Auth\SocialAuthController;
-use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
@@ -18,7 +17,7 @@ use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
-
+use Illuminate\Support\Facades\Auth;
 
 // Routes publiques d'authentification
 Route::middleware('guest')->group(function () {
@@ -35,7 +34,7 @@ Route::middleware('guest')->group(function () {
     Route::post('reset-password', [NewPasswordController::class, 'store'])->name('password.store');
 });
 
-// Routes protégées
+// Routes protégées par l'authentification standard
 Route::middleware('auth')->group(function () {
     Route::get('verify-email', EmailVerificationPromptController::class)->name('verification.notice');
     Route::get('verify-email/{id}/{hash}', VerifyEmailController::class)->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
@@ -67,18 +66,22 @@ Route::get('/dashboard', function () {
 // ==========================================
 // ROUTES VOYAGES & PARTAGE
 // ==========================================
-Route::resource('trips', TripController::class);
 
-// Partage et rejoindre un voyage via le lien unique
+// 1. Route de participation via lien unique (placée AVANT la ressource)
 Route::get('/trips/join/{share_token}', [TripController::class, 'join'])->name('trips.join');
+
+// 2. Génération de lien de partage protégé par le middleware
 Route::post('/trips/{trip}/share', [TripController::class, 'generateShareLink'])
     ->middleware('check.trip.access:share')
     ->name('trips.share');
 
-// Routes protégées par la limite de 2 voyages pour les non-inscrits
+// 3. Routes protégées par la limite de création pour les non-inscrits
 Route::middleware(['check.trip.access:create_or_join'])->group(function () {
-    // Si tu as une route spécifique de création ou de duplication, tu peux l'ajouter ici
+    // Si tu souhaites restreindre explicitement la création ici ou via le contrôleur
 });
+
+// 4. Ressource standard des voyages
+Route::resource('trips', TripController::class);
 
 // ==========================================
 // ROUTES SÉJOURS & TRANSITIONS
@@ -107,11 +110,12 @@ Route::post('/days/{day}/activities', [ActivityController::class, 'store'])->nam
 Route::patch('/activites/{activity}/period', [ActivityController::class, 'updatePeriod'])->name('activities.update-period');
 Route::delete('/activities/{activity}', [ActivityController::class, 'destroy'])->name('activities.destroy');
 
-// Redirection vers Google ou Facebook
+// ==========================================
+// AUTHENTIFICATION SOCIALE (GOOGLE)
+// ==========================================
 Route::get('/auth/{provider}', [SocialAuthController::class, 'redirectToProvider'])
     ->whereIn('provider', ['google'])
     ->name('auth.social');
 
-// Callback de retour après connexion
 Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'handleProviderCallback'])
     ->whereIn('provider', ['google']);
