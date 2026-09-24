@@ -13,6 +13,8 @@ return new class extends Migration {
         Schema::create('trips', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->nullable()->constrained()->onDelete('cascade');
+            $table->string('guest_token')->nullable()->index(); // 👈 Ajouté pour les non-inscrits
+            $table->string('share_token')->unique()->nullable(); // 👈 Ajouté pour le partage par lien
             $table->string('title');
             $table->text('description')->nullable();
             $table->date('start_date');
