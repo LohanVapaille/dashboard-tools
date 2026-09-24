@@ -11,7 +11,33 @@ class Trip extends Model
         'description',
         'start_date',
         'end_date',
+        'user_id',       // Permet de lier le voyage à un utilisateur inscrit
+        'guest_token',   // Permet de lier le voyage à un invité non inscrit (cookie)
+        'is_private',    // Définit si le voyage est privé ou non (par défaut true)
     ];
+
+    protected $casts = [
+        'is_private' => 'boolean',
+    ];
+
+    // Relation avec l'utilisateur créateur
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    // Relation avec les participants (table pivot trip_user)
+    public function users()
+    {
+        return $this->belongsToMany(User::class, 'trip_user')
+            ->withPivot('role', 'guest_token')
+            ->withTimestamps();
+    }
+
+    public function tripUsers()
+    {
+        return $this->hasMany(TripUser::class);
+    }
 
     public function stays()
     {

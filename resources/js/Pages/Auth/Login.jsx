@@ -147,7 +147,7 @@ export default function Login({ status, canResetPassword }) {
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                         Pas encore de compte ?{" "}
                         <Link
-                            // href={route("register")}
+                            href={route("register")}
                             className="text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
                         >
                             S'inscrire
