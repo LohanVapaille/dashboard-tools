@@ -46,3 +46,4 @@ Route::patch('/day-blocks/{dayBlock}', [DayBlockController::class, 'update'])->n
 Route::delete('/day-blocks/{dayBlock}', [DayBlockController::class, 'destroy'])->name('day-blocks.destroy');
 Route::patch('/days/{day}/periods', [DayPeriodController::class, 'update'])->name('day-periods.update');
 Route::put('/stays/{stay}', [StayController::class, 'update'])->name('stays.update');
+Route::patch('/activites/{activity}/period', [ActivityController::class, 'updatePeriod'])->name('activities.update-period');

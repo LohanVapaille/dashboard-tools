@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { router } from "@inertiajs/react";
+import axios from "axios";
 import { Plus } from "lucide-react";
+import { Droppable, Draggable } from "@hello-pangea/dnd";
 import DynamicIcon from "./DynamicIcon";
 import ActivityItem from "./ActivityItem";
 
@@ -12,7 +13,13 @@ const PERIOD_LABELS = {
     nuit: "Nuit",
 };
 
-export default function PeriodSlot({ periodKey, dayId, activities = [] }) {
+export default function PeriodSlot({
+    periodKey,
+    dayId,
+    activities = [],
+    onActivityAdded,
+    onActivityDeleted,
+}) {
     const [isAdding, setIsAdding] = useState(false);
     const [title, setTitle] = useState("");
     const [category, setCategory] = useState("autre");
@@ -23,28 +30,29 @@ export default function PeriodSlot({ periodKey, dayId, activities = [] }) {
 
     const handleAdd = (e) => {
         e.preventDefault();
-        router.post(
-            route("activities.store", dayId),
-            {
+        axios
+            .post(route("activities.store", dayId), {
                 title,
                 period: periodKey,
                 category,
                 price: price || 0,
                 description,
-            },
-            {
-                onSuccess: () => {
-                    setIsAdding(false);
-                    setTitle("");
-                    setPrice("");
-                    setDescription("");
-                },
-            },
-        );
+            })
+            .then((response) => {
+                if (onActivityAdded) onActivityAdded(response.data);
+                setIsAdding(false);
+                setTitle("");
+                setPrice("");
+                setDescription("");
+            })
+            .catch((error) => {
+                console.error("Erreur lors de l'ajout :", error);
+            });
     };
 
     return (
-        <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-2">
+        <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-2 h-full flex flex-col">
+            {/* En-tête (Titre du moment) - Hors de la zone de drop, reste fixe */}
             <div className="flex items-center justify-between pb-1 border-b border-slate-200 dark:border-slate-800">
                 <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     <DynamicIcon
@@ -61,12 +69,48 @@ export default function PeriodSlot({ periodKey, dayId, activities = [] }) {
                 </button>
             </div>
 
-            <div className="space-y-2">
-                {filteredActivities.map((act) => (
-                    <ActivityItem key={act.id} activity={act} />
-                ))}
-            </div>
+            {/* Zone de drop UNIQUEMENT pour la liste des activités sous le titre */}
+            <Droppable droppableId={periodKey}>
+                {(provided, snapshot) => (
+                    <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className={`space-y-2 flex-1 min-h-[60px] rounded-lg transition-colors ${
+                            snapshot.isDraggingOver
+                                ? "bg-indigo-50/50 dark:bg-indigo-950/20 border-2 border-dashed border-indigo-300 dark:border-indigo-700 p-1"
+                                : ""
+                        }`}
+                    >
+                        {filteredActivities.map((act, index) => (
+                            <Draggable
+                                key={act.id}
+                                draggableId={String(act.id)}
+                                index={index}
+                            >
+                                {(provided, snapshot) => (
+                                    <div
+                                        ref={provided.innerRef}
+                                        {...provided.draggableProps}
+                                        {...provided.dragHandleProps}
+                                        style={{
+                                            ...provided.draggableProps.style,
+                                        }}
+                                        className={`${snapshot.isDragging ? "shadow-2xl opacity-90 scale-[1.02] cursor-grabbing" : ""}`}
+                                    >
+                                        <ActivityItem
+                                            activity={act}
+                                            onDelete={onActivityDeleted}
+                                        />
+                                    </div>
+                                )}
+                            </Draggable>
+                        ))}
+                        {provided.placeholder}
+                    </div>
+                )}
+            </Droppable>
 
+            {/* Formulaire d'ajout */}
             {isAdding && (
                 <form
                     onSubmit={handleAdd}

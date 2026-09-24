@@ -1,14 +1,27 @@
 import React from "react";
-import { router } from "@inertiajs/react";
-import { Trash2, DollarSign, MapPin } from "lucide-react";
+import axios from "axios";
+import { Trash2, MapPin } from "lucide-react";
 import DynamicIcon from "./DynamicIcon";
 
-export default function ActivityItem({ activity }) {
+export default function ActivityItem({ activity, onDelete }) {
     const handleDelete = () => {
         if (confirm("Supprimer cette activité ?")) {
-            router.delete(route("activities.destroy", activity.id));
+            // 1. Supprime en BDD via Axios en arrière-plan
+            axios
+                .delete(route("activities.destroy", activity.id))
+                .then(() => {
+                    // 2. Met à jour l'affichage parent instantanément sans recharger
+                    if (onDelete) onDelete(activity.id);
+                })
+                .catch((error) => {
+                    console.error(
+                        "Erreur lors de la suppression de l'activité :",
+                        error,
+                    );
+                });
         }
     };
+
     return (
         <div className="flex items-center justify-between gap-2 p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-sm group hover:border-indigo-300 dark:hover:border-indigo-600 transition min-h-[44px]">
             {/* Partie Gauche : Icône + Textes (Centrés verticalement entre eux) */}

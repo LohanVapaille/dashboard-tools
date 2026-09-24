@@ -19,9 +19,11 @@ class ActivityController extends Controller
             'location_name' => 'nullable|string',
         ]);
 
-        $day->activities()->create($validated);
+        // Crée et récupère l'activité fraîchement insérée
+        $activity = $day->activities()->create($validated);
 
-        return back();
+        // Retourne l'objet JSON (nécessaire pour l'affichage dynamique front-end)
+        return response()->json($activity, 201);
     }
 
     public function update(Request $request, Activity $activity)
@@ -40,9 +42,24 @@ class ActivityController extends Controller
         return back();
     }
 
+    public function updatePeriod(Request $request, Activity $activity)
+    {
+        $validated = $request->validate([
+            'period' => 'required|in:matin,midi,apres_midi,soir,nuit',
+        ]);
+
+        $activity->update([
+            'period' => $validated['period']
+        ]);
+
+        return response()->json($activity);
+    }
+
     public function destroy(Activity $activity)
     {
         $activity->delete();
-        return back();
+
+        // Si la requête est en AJAX/Axios, un statut 200 vide ou noContent convient parfaitement
+        return response()->noContent();
     }
 }
