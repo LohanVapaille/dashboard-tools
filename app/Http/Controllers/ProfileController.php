@@ -45,14 +45,15 @@ class ProfileController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
-        $request->validate([
-            'password' => ['required', 'current_password'],
-        ]);
-
         $user = $request->user();
 
+        // 1. Déconnexion
         Auth::logout();
 
+        // 2. Supprimer les voyages créés par l'utilisateur (et les relations suivront si configuré, ou supprime manuellement)
+        $user->trips()->delete();
+
+        // 3. Supprimer le compte utilisateur
         $user->delete();
 
         $request->session()->invalidate();

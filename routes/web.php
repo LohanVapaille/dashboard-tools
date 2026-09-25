@@ -20,6 +20,7 @@ use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\TripMemberController;
 use App\Http\Controllers\TripInviteController;
+use App\Http\Controllers\ProfileController;
 
 // Routes publiques d'authentification
 Route::middleware('guest')->group(function () {
@@ -37,6 +38,8 @@ Route::middleware('guest')->group(function () {
 
     Route::get('/invite/{token}', [TripInviteController::class, 'show'])->name('trips.invite.show');
     Route::post('/invite/{token}/guest', [TripInviteController::class, 'joinAsGuest'])->name('trips.invite.guest');
+
+
 });
 
 // Routes protégées par l'authentification standard
@@ -51,12 +54,12 @@ Route::middleware('auth')->group(function () {
     Route::put('password', [PasswordController::class, 'update'])->name('password.update');
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 
-    Route::get('/test-logout', function () {
+    Route::get('/logout', function () {
         Auth::guard('web')->logout();
         request()->session()->invalidate();
         request()->session()->regenerateToken();
 
-        return redirect('/login')->with('status', 'Session détruite avec succès !');
+        return redirect('/login');
     });
     Route::get('/trips/{trip}/members', [TripMemberController::class, 'index'])->name('trips.members');
     Route::post('/trips/{trip}/members', [TripMemberController::class, 'store'])->name('trips.members.store');
@@ -64,6 +67,11 @@ Route::middleware('auth')->group(function () {
     Route::delete('/trips/{trip}/members/{member}', [TripMemberController::class, 'destroy'])->name('trips.members.remove');
 
     Route::post('/invite/{token}/join', [TripInviteController::class, 'joinAsUser'])->name('trips.invite.join');
+
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('password.update'); // Si géré séparément
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
 Route::get('/', function () {

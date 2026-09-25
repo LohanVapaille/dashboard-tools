@@ -1,10 +1,13 @@
 import React from "react";
 import { Link, usePage } from "@inertiajs/react";
-import { Compass, LogIn, LogOut, User as UserIcon } from "lucide-react";
+import { Compass, LogIn, User as UserIcon } from "lucide-react";
 
 export default function GuestLayout({ children }) {
     const { auth } = usePage().props;
     const user = auth?.user;
+
+    const userAvatar =
+        user?.avatar || user?.profile_photo_url || user?.google_avatar;
 
     return (
         <div className="min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans antialiased">
@@ -31,49 +34,32 @@ export default function GuestLayout({ children }) {
                         {/* Affichage de l'état de connexion / Session */}
                         <div className="flex items-center gap-3 pl-4 border-l border-slate-800 text-xs">
                             {user ? (
-                                <div className="flex items-center gap-3">
-                                    <div className="flex items-center gap-2.5">
-                                        {/* Avatar de l'utilisateur */}
-                                        {user.avatar ||
-                                        user.profile_photo_url ? (
-                                            <img
-                                                src={
-                                                    user.avatar ||
-                                                    user.profile_photo_url
-                                                }
-                                                alt={user.name}
-                                                className="w-7 h-7 rounded-full object-cover border border-slate-700"
-                                            />
-                                        ) : (
-                                            <div className="w-7 h-7 rounded-full bg-indigo-600/30 border border-indigo-500/30 flex items-center justify-center text-indigo-300 font-bold text-[10px]">
-                                                {user.name ? (
-                                                    user.name
-                                                        .charAt(0)
-                                                        .toUpperCase()
-                                                ) : (
-                                                    <UserIcon className="w-3.5 h-3.5" />
-                                                )}
-                                            </div>
-                                        )}
-
-                                        <span className="text-slate-300">
-                                            Connecté :{" "}
-                                            <strong className="text-white">
-                                                {user.name || user.email}
-                                            </strong>
-                                        </span>
-                                    </div>
-
-                                    <Link
-                                        href={route("logout")}
-                                        method="post"
-                                        as="button"
-                                        className="flex items-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 px-2.5 py-1.5 rounded-lg font-medium transition"
-                                    >
-                                        <LogOut className="w-3.5 h-3.5" />
-                                        Déconnexion
-                                    </Link>
-                                </div>
+                                <Link
+                                    href={route("profile.edit")}
+                                    className="flex items-center gap-3 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 px-3 py-1.5 rounded-xl group transition"
+                                    title="Accéder à mon profil"
+                                >
+                                    {userAvatar ? (
+                                        <img
+                                            src={userAvatar}
+                                            alt={user.name}
+                                            className="w-7 h-7 rounded-full object-cover border border-slate-600 group-hover:border-indigo-500 transition"
+                                        />
+                                    ) : (
+                                        <div className="w-7 h-7 rounded-full bg-indigo-600/30 border border-indigo-500/30 flex items-center justify-center text-indigo-300 font-bold text-[10px] group-hover:border-indigo-500 transition">
+                                            {user.name ? (
+                                                user.name
+                                                    .charAt(0)
+                                                    .toUpperCase()
+                                            ) : (
+                                                <UserIcon className="w-3.5 h-3.5" />
+                                            )}
+                                        </div>
+                                    )}
+                                    <span className="text-slate-300 group-hover:text-white transition font-medium">
+                                        {user.name || user.email}
+                                    </span>
+                                </Link>
                             ) : (
                                 <div className="flex items-center gap-3">
                                     <span className="text-slate-400">
