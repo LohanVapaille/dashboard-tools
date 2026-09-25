@@ -14,7 +14,12 @@ import {
     Calendar,
     X,
     Edit3,
+    Share2,
+    Copy,
+    Check,
+    Trash2,
 } from "lucide-react";
+import axios from "axios";
 
 export default function Show({ trip }) {
     const [isAddingStay, setIsAddingStay] = useState(false);
@@ -45,6 +50,90 @@ export default function Show({ trip }) {
         arrival_date: "",
         departure_date: "",
     });
+
+    // --- Partage du voyage ---
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [members, setMembers] = useState([]);
+    const [shareUrl, setShareUrl] = useState("");
+    const [copied, setCopied] = useState(false);
+
+    // Dans ton fetch de la modale de partage :
+    const [isOwner, setIsOwner] = useState(false);
+
+    const openShareModal = async () => {
+        setIsShareModalOpen(true);
+        try {
+            const response = await axios.get(route("trips.members", trip.id));
+            setMembers(response.data.members);
+            setShareUrl(response.data.share_url);
+            setIsOwner(response.data.is_owner); // Récupère si l'user est proprio
+        } catch (error) {
+            console.error("Erreur lors du chargement des membres", error);
+        }
+    };
+
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(shareUrl);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    const updateRole = async (memberId, newRole) => {
+        try {
+            await axios.patch(
+                route("trips.members.update", [trip.id, memberId]),
+                { role: newRole },
+            );
+            setMembers(
+                members.map((m) =>
+                    m.id === memberId ? { ...m, role: newRole } : m,
+                ),
+            );
+        } catch (error) {
+            console.error("Erreur modification rôle", error);
+        }
+    };
+
+    const removeMember = async (memberId) => {
+        try {
+            await axios.delete(
+                route("trips.members.remove", [trip.id, memberId]),
+            );
+            setMembers(members.filter((m) => m.id !== memberId));
+        } catch (error) {
+            console.error("Erreur suppression membre", error);
+        }
+    };
+
+    const [inviteEmail, setInviteEmail] = useState("");
+    const [inviteRole, setInviteRole] = useState("viewer");
+    const [inviteProcessing, setInviteProcessing] = useState(false);
+    const [inviteError, setInviteError] = useState("");
+
+    const inviteMember = async (e) => {
+        e.preventDefault();
+        setInviteProcessing(true);
+        setInviteError("");
+        try {
+            await axios.post(route("trips.members.store", trip.id), {
+                email: inviteEmail,
+                role: inviteRole,
+            });
+            setInviteEmail("");
+            setInviteRole("viewer");
+            const response = await axios.get(route("trips.members", trip.id));
+            setMembers(response.data.members);
+        } catch (error) {
+            console.error("Erreur lors de l'invitation", error);
+            setInviteError(
+                error.response?.data?.message ||
+                    "Impossible d'inviter cette personne.",
+            );
+        } finally {
+            setInviteProcessing(false);
+        }
+    };
+    // --- Fin partage ---
 
     const handleOpenEditTrip = () => {
         editTripForm.setData({
@@ -147,14 +236,23 @@ export default function Show({ trip }) {
             <div className="py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
                 {/* En-tête principal */}
                 <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                    {/* Bouton réglages discret, en haut à droite de la carte */}
-                    <button
-                        onClick={handleOpenEditTrip}
-                        title="Modifier le voyage"
-                        className="absolute top-4 right-4 p-1.5 text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-lg transition"
-                    >
-                        <Settings className="w-4 h-4" />
-                    </button>
+                    {/* Boutons discrets, en haut à droite de la carte */}
+                    <div className="absolute top-4 right-4 flex items-center gap-1">
+                        <button
+                            onClick={openShareModal}
+                            title="Partager le voyage"
+                            className="p-1.5 text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-lg transition"
+                        >
+                            <Share2 className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={handleOpenEditTrip}
+                            title="Modifier le voyage"
+                            className="p-1.5 text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-lg transition"
+                        >
+                            <Settings className="w-4 h-4" />
+                        </button>
+                    </div>
 
                     <div>
                         <Link
@@ -165,7 +263,7 @@ export default function Show({ trip }) {
                             Retour à la liste
                         </Link>
 
-                        <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+                        <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white pr-16">
                             {trip.title}
                         </h1>
 
@@ -640,6 +738,192 @@ export default function Show({ trip }) {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de gestion du partage et des accès */}
+            {isShareModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center justify-between mb-6 border-b border-slate-100 dark:border-slate-700 pb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                                    <Share2 className="w-6 h-6" />
+                                </div>
+
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                                        Gérer l'accès au voyage
+                                    </h3>
+
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        Toute personne disposant du lien de
+                                        partage pourra accéder au voyage de
+                                        façon permanente.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={() => setIsShareModalOpen(false)}
+                                className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-6">
+                            {/* Lien de partage permanent */}
+                            <div className="space-y-2">
+                                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                                    Lien d'invitation permanent
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={shareUrl}
+                                        className="w-full text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-600 dark:text-slate-300 select-all"
+                                    />
+                                    <button
+                                        onClick={copyToClipboard}
+                                        className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shrink-0"
+                                    >
+                                        {copied ? (
+                                            <Check className="w-4 h-4" />
+                                        ) : (
+                                            <Copy className="w-4 h-4" />
+                                        )}
+                                        {copied ? "Copié !" : "Copier"}
+                                    </button>
+                                </div>
+                                <p className="text-[11px] text-slate-400 mt-1">
+                                    Un(e) invité(e) via ce lien pourra créer un
+                                    compte, se connecter, ou continuer en
+                                    lecture seule sans compte.
+                                </p>
+                            </div>
+
+                            {/* Ajout manuel d'un compte */}
+                            <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                                    Ajouter un compte manuellement
+                                </label>
+
+                                <form
+                                    onSubmit={inviteMember}
+                                    className="flex items-center gap-2"
+                                >
+                                    <input
+                                        type="email"
+                                        required
+                                        placeholder="email@exemple.com"
+                                        value={inviteEmail}
+                                        onChange={(e) =>
+                                            setInviteEmail(e.target.value)
+                                        }
+                                        className="flex-1 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                    <select
+                                        value={inviteRole}
+                                        onChange={(e) =>
+                                            setInviteRole(e.target.value)
+                                        }
+                                        className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 text-slate-700 dark:text-slate-300"
+                                    >
+                                        <option value="viewer">Lecteur</option>
+                                        <option value="editor">Éditeur</option>
+                                    </select>
+                                    <button
+                                        type="submit"
+                                        disabled={inviteProcessing}
+                                        className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-md transition shrink-0"
+                                    >
+                                        {inviteProcessing ? "..." : "Inviter"}
+                                    </button>
+                                </form>
+
+                                {inviteError && (
+                                    <p className="text-red-500 text-xs mt-1">
+                                        {inviteError}
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Liste des membres ayant accès */}
+                            <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-700">
+                                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                                    Personnes ayant accès ({members.length})
+                                </label>
+                                <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                                    {members.length === 0 && (
+                                        <p className="text-xs text-slate-400 text-center py-4">
+                                            Personne d'autre n'a encore accès à
+                                            ce voyage.
+                                        </p>
+                                    )}
+                                    {members.map((member) => (
+                                        <div
+                                            key={member.id}
+                                            className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60"
+                                        >
+                                            <div>
+                                                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                                                    {member.name ||
+                                                        member.email}
+                                                </p>
+                                                <p className="text-xs text-slate-400">
+                                                    {member.email}
+                                                    {member.status ===
+                                                        "pending" &&
+                                                        " · en attente"}
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <select
+                                                    value={member.role}
+                                                    onChange={(e) =>
+                                                        updateRole(
+                                                            member.id,
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-slate-700 dark:text-slate-300 focus:ring-indigo-500 focus:border-indigo-500"
+                                                >
+                                                    <option value="editor">
+                                                        Éditeur
+                                                        (Lecture/Écriture)
+                                                    </option>
+                                                    <option value="viewer">
+                                                        Lecteur (Read-only)
+                                                    </option>
+                                                </select>
+                                                <button
+                                                    onClick={() =>
+                                                        removeMember(member.id)
+                                                    }
+                                                    title="Révoquer l'accès"
+                                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsShareModalOpen(false)}
+                                    className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-lg transition"
+                                >
+                                    Fermer
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

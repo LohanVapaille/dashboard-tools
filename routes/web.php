@@ -18,6 +18,8 @@ use App\Http\Controllers\Auth\EmailVerificationPromptController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\TripMemberController;
+use App\Http\Controllers\TripInviteController;
 
 // Routes publiques d'authentification
 Route::middleware('guest')->group(function () {
@@ -32,6 +34,9 @@ Route::middleware('guest')->group(function () {
 
     Route::get('reset-password/{token}', [NewPasswordController::class, 'create'])->name('password.reset');
     Route::post('reset-password', [NewPasswordController::class, 'store'])->name('password.store');
+
+    Route::get('/invite/{token}', [TripInviteController::class, 'show'])->name('trips.invite.show');
+    Route::post('/invite/{token}/guest', [TripInviteController::class, 'joinAsGuest'])->name('trips.invite.guest');
 });
 
 // Routes protégées par l'authentification standard
@@ -53,6 +58,12 @@ Route::middleware('auth')->group(function () {
 
         return redirect('/login')->with('status', 'Session détruite avec succès !');
     });
+    Route::get('/trips/{trip}/members', [TripMemberController::class, 'index'])->name('trips.members');
+    Route::post('/trips/{trip}/members', [TripMemberController::class, 'store'])->name('trips.members.store');
+    Route::patch('/trips/{trip}/members/{member}', [TripMemberController::class, 'update'])->name('trips.members.update');
+    Route::delete('/trips/{trip}/members/{member}', [TripMemberController::class, 'destroy'])->name('trips.members.remove');
+
+    Route::post('/invite/{token}/join', [TripInviteController::class, 'joinAsUser'])->name('trips.invite.join');
 });
 
 Route::get('/', function () {

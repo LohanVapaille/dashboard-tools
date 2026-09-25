@@ -5,6 +5,7 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 use App\Models\Trip;
 use App\Models\TripUser;
+use App\Models\TripMember;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
@@ -18,14 +19,22 @@ class TripController extends Controller
         $user = Auth::user();
         $guestToken = $request->cookie('guest_token');
 
-        // On filtre pour que chaque utilisateur (ou invité) ne voie que ses propres voyages
         $trips = Trip::withCount('stays')
             ->when($user, function ($query, $user) {
-                // Si connecté : on récupère les voyages créés par l'utilisateur OU où il est participant via la table pivot
+                // 1. Si l'utilisateur est connecté :
+                // Ses propres voyages OU les voyages où il participe via la table pivot
                 $query->where('user_id', $user->id)
                     ->orWhereHas('users', fn($q) => $q->where('users.id', $user->id));
             }, function ($query) use ($guestToken) {
-                // Si invité : on récupère via le guest_token du cookie
+                // 2. Si c'est un invité :
+                // Uniquement si un guest_token existe, sinon collection vide pour ne rien fuiter
+                if (!$guestToken) {
+                    // Force une requête qui ne retourne rien si aucun cookie invité n'est présent
+                    $query->whereRaw('1 = 0');
+                    return;
+                }
+
+                // Les voyages créés par cet invité (guest_token) OU rejoints (via trip_users)
                 $query->where('guest_token', $guestToken)
                     ->orWhereHas('tripUsers', fn($q) => $q->where('guest_token', $guestToken));
             })
@@ -36,7 +45,6 @@ class TripController extends Controller
             'trips' => $trips,
         ]);
     }
-
     public function store(Request $request)
     {
         // Valider les données du voyage
@@ -85,11 +93,58 @@ class TripController extends Controller
     {
         $this->authorize('view', $trip);
 
-        $trip->load(['stays.days.activities', 'stays.days.blocks', 'transitions']);
+        $trip->load(['stays.days.activities', 'stays.days.blocks', 'transitions', 'users']);
 
         return Inertia::render('Trips/Show', [
             'trip' => $trip,
         ]);
+    }
+
+    // Récupérer la liste des membres et le lien de partage pour la modale
+    // Récupérer la liste des membres et le lien de partage pour la modale
+    public function members(Trip $trip)
+    {
+        $this->authorize('update', $trip);
+
+        $members = $trip->members()->with('user:id,name,email')->get()->map(function ($member) {
+            return [
+                'id' => $member->id,
+                'name' => $member->user->name ?? 'Invité par email',
+                'email' => $member->user->email ?? $member->email,
+                'role' => $member->role,
+                'status' => $member->status,
+                'type' => $member->user_id ? 'user' : 'guest'
+            ];
+        });
+
+        return response()->json([
+            'members' => $members,
+            'share_url' => route('trips.invite.show', $trip->share_token),
+        ]);
+    }
+
+    // Modifier le rôle d'un membre (editor / viewer)
+    public function updateMemberRole(Request $request, Trip $trip, $memberId)
+    {
+        $this->authorize('update', $trip);
+
+        $request->validate(['role' => 'required|in:editor,viewer']);
+
+        $member = TripMember::where('trip_id', $trip->id)->where('id', $memberId)->firstOrFail();
+        $member->update(['role' => $request->role]);
+
+        return back();
+    }
+
+    // Supprimer l'accès d'un membre
+    public function removeMember(Trip $trip, $memberId)
+    {
+        $this->authorize('update', $trip);
+
+        $member = TripMember::where('trip_id', $trip->id)->where('id', $memberId)->firstOrFail();
+        $member->delete();
+
+        return back();
     }
 
     public function update(Request $request, Trip $trip)
