@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, usePage } from "@inertiajs/react";
-import { Compass, LogIn, LogOut } from "lucide-react";
+import { Compass, LogIn, LogOut, User as UserIcon } from "lucide-react";
 
 export default function GuestLayout({ children }) {
     const { auth } = usePage().props;
@@ -32,12 +32,38 @@ export default function GuestLayout({ children }) {
                         <div className="flex items-center gap-3 pl-4 border-l border-slate-800 text-xs">
                             {user ? (
                                 <div className="flex items-center gap-3">
-                                    <span className="text-slate-300">
-                                        Connecté :{" "}
-                                        <strong className="text-white">
-                                            {user.name || user.email}
-                                        </strong>
-                                    </span>
+                                    <div className="flex items-center gap-2.5">
+                                        {/* Avatar de l'utilisateur */}
+                                        {user.avatar ||
+                                        user.profile_photo_url ? (
+                                            <img
+                                                src={
+                                                    user.avatar ||
+                                                    user.profile_photo_url
+                                                }
+                                                alt={user.name}
+                                                className="w-7 h-7 rounded-full object-cover border border-slate-700"
+                                            />
+                                        ) : (
+                                            <div className="w-7 h-7 rounded-full bg-indigo-600/30 border border-indigo-500/30 flex items-center justify-center text-indigo-300 font-bold text-[10px]">
+                                                {user.name ? (
+                                                    user.name
+                                                        .charAt(0)
+                                                        .toUpperCase()
+                                                ) : (
+                                                    <UserIcon className="w-3.5 h-3.5" />
+                                                )}
+                                            </div>
+                                        )}
+
+                                        <span className="text-slate-300">
+                                            Connecté :{" "}
+                                            <strong className="text-white">
+                                                {user.name || user.email}
+                                            </strong>
+                                        </span>
+                                    </div>
+
                                     <Link
                                         href={route("logout")}
                                         method="post"

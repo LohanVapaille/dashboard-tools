@@ -22,6 +22,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'avatar', // <-- Ajoute ceci pour autoriser l'enregistrement de l'avatar
     ];
 
     /**
