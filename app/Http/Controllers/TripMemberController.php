@@ -7,12 +7,14 @@ use App\Models\Trip;
 use App\Models\TripMember;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class TripMemberController extends Controller
 {
+    use AuthorizesRequests;
     public function index(Trip $trip)
     {
-        $this->authorizeOwner($trip);
+        $this->authorize('view', $trip);
 
         $members = $trip->members()
             ->with('user:id,name,email')
@@ -33,7 +35,7 @@ class TripMemberController extends Controller
 
     public function store(Request $request, Trip $trip)
     {
-        $this->authorizeOwner($trip);
+        $this->authorize('update', $trip);
 
         $data = $request->validate([
             'email' => ['required', 'email'],
