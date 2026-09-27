@@ -10,6 +10,8 @@ class ActivityController extends Controller
 {
     public function store(Request $request, Day $day)
     {
+
+
         $validated = $request->validate([
             'title' => 'required|string|max:191',
             'period' => 'required|in:matin,midi,apres_midi,soir,nuit',

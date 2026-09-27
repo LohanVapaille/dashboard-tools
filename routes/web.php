@@ -22,6 +22,8 @@ use App\Http\Controllers\TripMemberController;
 use App\Http\Controllers\TripInviteController;
 use App\Http\Controllers\ProfileController;
 
+use App\Http\Middleware\CheckTripAccess;
+
 // Routes publiques d'authentification
 Route::middleware('guest')->group(function () {
     Route::get('register', [RegisteredUserController::class, 'create'])->name('register');
@@ -37,12 +39,13 @@ Route::middleware('guest')->group(function () {
     Route::post('reset-password', [NewPasswordController::class, 'store'])->name('password.store');
 
 
+    Route::get('/invite/{token}', [TripInviteController::class, 'show'])->name('trips.invite.show');
+    Route::post('/invite/{token}/guest', [TripInviteController::class, 'joinAsGuest'])->name('trips.invite.guest');
+
 
 
 });
 
-Route::get('/invite/{token}', [TripInviteController::class, 'show'])->name('trips.invite.show');
-Route::post('/invite/{token}/guest', [TripInviteController::class, 'joinAsGuest'])->name('trips.invite.guest');
 
 // Routes protégées par l'authentification standard
 Route::middleware('auth')->group(function () {
@@ -140,3 +143,14 @@ Route::get('/auth/{provider}', [SocialAuthController::class, 'redirectToProvider
 
 Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'handleProviderCallback'])
     ->whereIn('provider', ['google']);
+
+
+Route::middleware(['check.trip.access:edit'])->group(function () {
+    Route::post('/trips/{trip}/stays', [StayController::class, 'store'])->name('stays.store');
+    Route::put('/stays/{stay}', [StayController::class, 'update'])->name('stays.update');
+    Route::delete('/stays/{stay}', [StayController::class, 'destroy'])->name('stays.destroy');
+
+    Route::post('/days/{day}/activities', [ActivityController::class, 'store'])->name('activities.store');
+    Route::delete('/activities/{activity}', [ActivityController::class, 'destroy'])->name('activities.destroy');
+    // ... toutes tes autres routes de modification / suppression
+});

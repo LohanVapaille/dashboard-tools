@@ -172,6 +172,8 @@ class TripController extends Controller
         return redirect()->route('trips.index');
     }
 
+    // Dans TripController.php (méthode join)
+
     public function join($share_token, Request $request)
     {
         $trip = Trip::where('share_token', $share_token)->firstOrFail();
@@ -185,6 +187,8 @@ class TripController extends Controller
             ->first();
 
         if (!$existingParticipation) {
+            // Forcer le rôle 'viewer' si l'utilisateur n'a pas de compte (invité)
+            // Les utilisateurs connectés via le lien obtiennent 'editor' ou 'viewer' selon ton choix (ici 'viewer' par sécurité, ou 'editor' si le lien donne les droits d'édition)
             $role = $user ? 'editor' : 'viewer';
 
             TripUser::create([
