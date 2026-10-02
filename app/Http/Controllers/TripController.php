@@ -105,7 +105,7 @@ class TripController extends Controller
         $user = Auth::user();
         $guestToken = request()->cookie('guest_token');
 
-        $trip->load(['stays.days.activities', 'stays.days.blocks', 'transitions', 'participants.user:id,name']);
+        $trip->load(['stays.days.activities', 'stays.days.blocks', 'transitions', 'notes', 'participants.user:id,name']);
 
         $trip->permissions = [
             'isOwner' => $trip->isOwner($user, $guestToken),

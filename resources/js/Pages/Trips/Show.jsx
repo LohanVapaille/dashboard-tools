@@ -3,6 +3,7 @@ import { Head, Link, router, useForm, usePage } from "@inertiajs/react";
 import GuestLayout from "@/Layouts/GuestLayout";
 import TripMap from "@/Components/TripMap";
 import StayCard from "@/Components/Itinerary/StayCard";
+import TripNotes from "@/Components/Itinerary/TripNotes";
 import TransitionCard from "@/Components/Itinerary/TransitionCard";
 import LocationSearchInput from "@/Components/Itinerary/LocationSearchInput";
 import GuestLimitModal from "@/Components/GuestLimitModal";
@@ -325,6 +326,8 @@ function ShowContent({ trip }) {
                             Ajouter un séjour
                         </button>
                     </div>
+
+                    <TripNotes trip={trip} />
 
                     <div className="bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
                         <TripMap stays={trip.stays || []} />

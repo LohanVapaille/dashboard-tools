@@ -36,6 +36,11 @@ class Trip extends Model
         return $this->hasMany(StayTransition::class);
     }
 
+    public function notes()
+    {
+        return $this->hasMany(TripNote::class)->orderBy('position');
+    }
+
     public function participants()
     {
         return $this->hasMany(TripParticipant::class);

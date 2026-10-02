@@ -54,7 +54,7 @@ class CheckTripAccess
         if (is_string($trip) || is_int($trip))
             return Trip::find($trip);
 
-        foreach (['stay', 'day', 'activity', 'dayBlock', 'transition'] as $param) {
+        foreach (['stay', 'day', 'activity', 'dayBlock', 'tripNote', 'transition'] as $param) {
             $model = $request->route($param);
             if (!$model)
                 continue;
@@ -64,6 +64,7 @@ class CheckTripAccess
                 'day' => $model->stay->trip,
                 'activity' => $model->day->stay->trip,
                 'dayBlock' => $model->day->stay->trip,
+                'tripNote' => $model->trip,
                 'transition' => $model->fromStay->trip ?? $model->trip,
             };
         }

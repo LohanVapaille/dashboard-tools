@@ -30,7 +30,11 @@ const normalize = (obj) =>
         ),
     );
 
-export default function DayBlockItem({ block }) {
+export default function DayBlockItem({
+    block,
+    routePrefix = "day-blocks",
+    sticky = false,
+}) {
     const { canEdit } = useTripPermissions();
     const config = BLOCK_TYPES[block.type];
 
@@ -46,14 +50,14 @@ export default function DayBlockItem({ block }) {
     const isList = block.type === "checklist" || block.type === "budget";
 
     const patch = (data) =>
-        router.patch(route("day-blocks.update", block.id), data, {
+        router.patch(route(`${routePrefix}.update`, block.id), data, {
             preserveScroll: true,
             preserveState: true,
         });
 
     const handleDelete = () => {
         if (confirm(`Supprimer « ${block.title} » ?`)) {
-            router.delete(route("day-blocks.destroy", block.id), {
+            router.delete(route(`${routePrefix}.destroy`, block.id), {
                 preserveScroll: true,
                 preserveState: true,
             });
@@ -117,7 +121,7 @@ export default function DayBlockItem({ block }) {
     const total = items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
 
     return (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+        <div className={`border rounded-2xl p-4 shadow-sm space-y-3 ${sticky ? "h-full bg-white dark:bg-slate-900 border-blue-200 dark:border-blue-950 shadow-blue-900/5" : "bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800"}`}>
             {/* En-tête : titre modifiable + suppression */}
             <div className="flex items-center gap-2">
                 <div
@@ -241,6 +245,8 @@ export default function DayBlockItem({ block }) {
                                                     ? "bg-indigo-600 border-indigo-600 text-white"
                                                     : "border-slate-300 dark:border-slate-600"
                                             }`}
+                                            disabled={!canEdit}
+                                            aria-label={`${item.done ? "Décocher" : "Cocher"} ${item.text}`}
                                         >
                                             {item.done && (
                                                 <Check className="w-3 h-3" />
@@ -269,6 +275,7 @@ export default function DayBlockItem({ block }) {
                                     <button
                                         onClick={() => removeItem(item.id)}
                                         title="Retirer"
+                                        disabled={!canEdit}
                                         className="text-slate-300 hover:text-red-500 transition-colors"
                                     >
                                         <X className="w-3 h-3" />

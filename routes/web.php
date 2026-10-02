@@ -8,6 +8,7 @@ use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\StayTransitionController;
 use App\Http\Controllers\DayBlockController;
 use App\Http\Controllers\DayPeriodController;
+use App\Http\Controllers\TripNoteController;
 use App\Http\Controllers\Auth\SocialAuthController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
@@ -91,6 +92,10 @@ Route::resource('trips', TripController::class);
 
 // Édition d'itinéraire — admin/editor/owner uniquement, appliqué une seule fois
 Route::middleware('check.trip.access:edit')->group(function () {
+    Route::post('/trips/{trip}/notes', [TripNoteController::class, 'store'])->name('trip-notes.store');
+    Route::patch('/trip-notes/{tripNote}', [TripNoteController::class, 'update'])->name('trip-notes.update');
+    Route::delete('/trip-notes/{tripNote}', [TripNoteController::class, 'destroy'])->name('trip-notes.destroy');
+
     Route::post('/trips/{trip}/stays', [StayController::class, 'store'])->name('stays.store');
     Route::put('/stays/{stay}', [StayController::class, 'update'])->name('stays.update');
     Route::delete('/stays/{stay}', [StayController::class, 'destroy'])->name('stays.destroy');
