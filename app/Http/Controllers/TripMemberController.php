@@ -1,88 +1,88 @@
 <?php
-// app/Http/Controllers/TripMemberController.php
 
 namespace App\Http\Controllers;
 
 use App\Models\Trip;
-use App\Models\TripMember;
+use App\Models\TripParticipant;
 use App\Models\User;
-use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\Request;
 
 class TripMemberController extends Controller
 {
     use AuthorizesRequests;
+
     public function index(Trip $trip)
     {
-        $this->authorize('view', $trip);
+        $this->authorize('manageAccess', $trip);
 
-        $members = $trip->members()
-            ->with('user:id,name,email')
-            ->get()
-            ->map(fn(TripMember $member) => [
-                'id' => $member->id,
-                'name' => $member->user->name ?? null,
-                'email' => $member->user->email ?? $member->email,
-                'role' => $member->role,
-                'status' => $member->status,
-            ]);
+        $members = $trip->participants()->with('user:id,name,email')->get()->map(fn($p) => [
+            'id' => $p->id,
+            'name' => $p->user->name ?? 'Invité par e-mail',
+            'email' => $p->user->email ?? $p->email,
+            'role' => $p->role,
+            'status' => $p->status,
+            'type' => $p->user_id ? 'user' : 'guest',
+        ]);
 
         return response()->json([
             'members' => $members,
-            'share_url' => route('trips.invite.show', $trip->share_token),
+            'share_url' => route('trips.join', $trip->share_token),
         ]);
     }
 
     public function store(Request $request, Trip $trip)
     {
-        $this->authorize('update', $trip);
+        $this->authorize('manageAccess', $trip);
 
-        $data = $request->validate([
-            'email' => ['required', 'email'],
-            'role' => ['required', 'in:editor,viewer'],
+        $validated = $request->validate([
+            'email' => 'required|email',
+            'role' => 'required|in:editor,viewer', // pas d'admin direct par invitation
         ]);
 
-        $user = User::where('email', $data['email'])->first();
+        $user = User::where('email', $validated['email'])->first();
 
-        TripMember::updateOrCreate(
-            [
-                'trip_id' => $trip->id,
-                'user_id' => $user?->id,
-                'email' => $user ? null : $data['email'],
-            ],
-            [
-                'role' => $data['role'],
-                'status' => $user ? 'accepted' : 'pending',
-            ],
-        );
+        if ($trip->isOwner($user)) {
+            return response()->json(['message' => 'Cette personne est déjà propriétaire du voyage.'], 422);
+        }
 
-        return response()->json(['ok' => true]);
-    }
-
-    public function update(Request $request, Trip $trip, TripMember $member)
-    {
-        $this->authorizeOwner($trip);
-
-        $data = $request->validate([
-            'role' => ['required', 'in:editor,viewer'],
+        $participant = TripParticipant::firstOrNew([
+            'trip_id' => $trip->id,
+            'user_id' => $user?->id,
+            'email' => $user ? null : $validated['email'],
         ]);
 
-        $member->update(['role' => $data['role']]);
+        $participant->role = $validated['role'];
+        $participant->status = $user ? 'accepted' : 'pending';
+        $participant->save();
 
-        return response()->json(['ok' => true]);
+        return response()->json(['message' => 'Invitation envoyée.']);
     }
 
-    public function destroy(Trip $trip, TripMember $member)
+    public function update(Request $request, Trip $trip, TripParticipant $member)
     {
-        $this->authorizeOwner($trip);
+        $this->authorize('manageRoles', $trip);
+
+        // Empêche de modifier un membre appartenant à un autre voyage
+        abort_if($member->trip_id !== $trip->id, 404);
+
+        $request->validate([
+            'role' => 'required|in:admin,editor,viewer', // <-- 'admin' était manquant, c'était le bug
+        ]);
+
+        $member->update(['role' => $request->role]);
+
+        return back();
+    }
+
+    public function destroy(Trip $trip, TripParticipant $member)
+    {
+        $this->authorize('manageRoles', $trip);
+
+        abort_if($member->trip_id !== $trip->id, 404);
 
         $member->delete();
 
-        return response()->json(['ok' => true]);
-    }
-
-    private function authorizeOwner(Trip $trip): void
-    {
-        abort_unless($trip->user_id === auth()->id(), 403);
+        return back();
     }
 }

@@ -3,6 +3,7 @@ import { router } from "@inertiajs/react";
 import { MapPin, Calendar, Trash2, Edit3, ChevronDown } from "lucide-react";
 import DayCard from "./DayCard"; // Ou le nom de ton composant de jour (ex: DayContainer)
 import { formatDate } from "@/Utils/formatters";
+import { useTripPermissions } from "@/Contexts/TripPermissionsContext";
 
 // Liste de couleurs Tailwind pour alterner les bordures gauches des jours
 const DAY_BORDER_COLORS = [
@@ -16,9 +17,11 @@ const DAY_BORDER_COLORS = [
 ];
 
 export default function StayCard({ stay, onEdit }) {
+    const { canEdit } = useTripPermissions();
     const [isOpen, setIsOpen] = useState(true);
 
     const handleDeleteStay = () => {
+        if (!canEdit) return;
         if (confirm(`Supprimer le séjour "${stay.location_name}" ?`)) {
             router.delete(route("stays.destroy", stay.id));
         }
@@ -64,13 +67,15 @@ export default function StayCard({ stay, onEdit }) {
                     </button>
 
                     {/* Bouton de suppression */}
-                    <button
-                        onClick={handleDeleteStay}
-                        className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition"
-                        title="Supprimer le séjour"
-                    >
-                        <Trash2 className="w-5 h-5" />
-                    </button>
+                    {canEdit && (
+                        <button
+                            onClick={handleDeleteStay}
+                            className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition"
+                            title="Supprimer le séjour"
+                        >
+                            <Trash2 className="w-5 h-5" />
+                        </button>
+                    )}
 
                     {/* Icône flèche pour l'accordéon */}
                     <div

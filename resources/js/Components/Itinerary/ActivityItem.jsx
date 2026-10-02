@@ -2,8 +2,10 @@ import React from "react";
 import axios from "axios";
 import { Trash2, MapPin } from "lucide-react";
 import DynamicIcon from "./DynamicIcon";
+import { useTripPermissions } from "@/Contexts/TripPermissionsContext";
 
 export default function ActivityItem({ activity, onDelete }) {
+    const { canEdit } = useTripPermissions();
     const handleDelete = () => {
         if (confirm("Supprimer cette activité ?")) {
             // 1. Supprime en BDD via Axios en arrière-plan
@@ -66,13 +68,15 @@ export default function ActivityItem({ activity, onDelete }) {
                     </span>
                 )}
 
-                <button
-                    onClick={handleDelete}
-                    title="Supprimer l'activité"
-                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-opacity p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-700"
-                >
-                    <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {canEdit && (
+                    <button
+                        onClick={handleDelete}
+                        title="Supprimer l'activité"
+                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-opacity p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-700"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                )}
             </div>
         </div>
     );

@@ -12,33 +12,18 @@ class Trip extends Model
         'description',
         'start_date',
         'end_date',
-        'user_id',       // Permet de lier le voyage à un utilisateur inscrit
-        'guest_token',   // Permet de lier le voyage à un invité non inscrit (cookie)
-        'is_private',    // Définit si le voyage est privé ou non (par défaut true)
+        'user_id',
+        'guest_token',
+        'is_private',
     ];
 
     protected $casts = [
         'is_private' => 'boolean',
     ];
 
-    // Relation avec l'utilisateur créateur
     public function user()
     {
         return $this->belongsTo(User::class);
-    }
-
-    // Relation avec les participants (table pivot trip_user)
-
-    public function users()
-    {
-        return $this->belongsToMany(User::class, 'trip_members')
-            ->withPivot(['role', 'status', 'email'])
-            ->withTimestamps();
-    }
-
-    public function tripUsers()
-    {
-        return $this->hasMany(TripUser::class);
     }
 
     public function stays()
@@ -51,6 +36,10 @@ class Trip extends Model
         return $this->hasMany(StayTransition::class);
     }
 
+    public function participants()
+    {
+        return $this->hasMany(TripParticipant::class);
+    }
 
     protected static function booted()
     {
@@ -59,31 +48,57 @@ class Trip extends Model
         });
     }
 
-    public function members()
+    // Un invité est propriétaire via guest_token, un utilisateur via user_id.
+    public function isOwner($user, ?string $guestToken = null): bool
     {
-        return $this->hasMany(TripMember::class);
-    }
-
-    // Si tu veux aussi lier directement aux utilisateurs via les membres :
-
-
-    public function roleFor(?\App\Models\User $user): ?string
-    {
-        if (!$user) {
-            return null;
+        if ($user) {
+            return $this->user_id === $user->id;
         }
 
-        if ($this->user_id === $user->id) {
+        return $guestToken !== null && $this->guest_token === $guestToken;
+    }
+
+    public function participantFor($user, ?string $guestToken = null): ?TripParticipant
+    {
+        if ($user) {
+            return $this->participants->firstWhere('user_id', $user->id);
+        }
+        return $guestToken ? $this->participants->firstWhere('guest_token', $guestToken) : null;
+    }
+
+    public function roleFor($user, ?string $guestToken = null): ?string
+    {
+        if ($this->isOwner($user, $guestToken)) {
             return 'owner';
         }
-
-        return $this->members()->where('user_id', $user->id)->value('role');
+        return $this->participantFor($user, $guestToken)?->role;
     }
 
-    public function canEdit(?\App\Models\User $user): bool
+    public function canView($user, ?string $guestToken = null): bool
     {
-        return in_array($this->roleFor($user), ['owner', 'editor'], true);
+        return $this->isOwner($user, $guestToken) || $this->roleFor($user, $guestToken) !== null;
     }
 
+    public function canEdit($user, ?string $guestToken = null): bool
+    {
+        return $this->isOwner($user, $guestToken) || in_array($this->roleFor($user, $guestToken), ['admin', 'editor']);
+    }
 
+    // Voir uniquement le lien de partage (copier/coller) : owner, admin, editor
+    public function canViewShareLink($user, ?string $guestToken = null): bool
+    {
+        return $this->isOwner($user, $guestToken) || in_array($this->roleFor($user, $guestToken), ['admin', 'editor']);
+    }
+
+    // Lister les membres + inviter + régénérer le lien : owner, admin
+    public function canManageAccess($user, ?string $guestToken = null): bool
+    {
+        return $this->isOwner($user, $guestToken) || $this->roleFor($user, $guestToken) === 'admin';
+    }
+
+    // Changer un rôle / révoquer un accès : owner uniquement (y compris owner-invité)
+    public function canManageRoles($user, ?string $guestToken = null): bool
+    {
+        return $this->isOwner($user, $guestToken);
+    }
 }

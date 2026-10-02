@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { Droppable, Draggable } from "@hello-pangea/dnd";
 import DynamicIcon from "./DynamicIcon";
 import ActivityItem from "./ActivityItem";
+import { useTripPermissions } from "@/Contexts/TripPermissionsContext";
 
 const PERIOD_LABELS = {
     matin: "Matin",
@@ -50,6 +51,8 @@ export default function PeriodSlot({
             });
     };
 
+    const { canEdit } = useTripPermissions();
+
     return (
         <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-2 h-full flex flex-col">
             {/* En-tête (Titre du moment) - Hors de la zone de drop, reste fixe */}
@@ -62,7 +65,8 @@ export default function PeriodSlot({
                     {PERIOD_LABELS[periodKey]}
                 </div>
                 <button
-                    onClick={() => setIsAdding(!isAdding)}
+                    onClick={() => canEdit && setIsAdding(!isAdding)}
+                    disabled={!canEdit}
                     className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-300"
                 >
                     <Plus className="w-4 h-4" />
@@ -70,7 +74,7 @@ export default function PeriodSlot({
             </div>
 
             {/* Zone de drop UNIQUEMENT pour la liste des activités sous le titre */}
-            <Droppable droppableId={periodKey}>
+            <Droppable droppableId={periodKey} isDropDisabled={!canEdit}>
                 {(provided, snapshot) => (
                     <div
                         ref={provided.innerRef}
@@ -86,6 +90,7 @@ export default function PeriodSlot({
                                 key={act.id}
                                 draggableId={String(act.id)}
                                 index={index}
+                                isDragDisabled={!canEdit}
                             >
                                 {(provided, snapshot) => (
                                     <div

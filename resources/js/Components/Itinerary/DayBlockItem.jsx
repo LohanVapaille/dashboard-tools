@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { router } from "@inertiajs/react";
 import { Plus, Trash2, Check, X, ExternalLink } from "lucide-react";
 import { BLOCK_TYPES } from "@/Constants/dayBlocks";
+import { useTripPermissions } from "@/Contexts/TripPermissionsContext";
 
 const inputClass =
     "w-full text-xs bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl px-3 py-2 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500";
@@ -30,6 +31,7 @@ const normalize = (obj) =>
     );
 
 export default function DayBlockItem({ block }) {
+    const { canEdit } = useTripPermissions();
     const config = BLOCK_TYPES[block.type];
 
     const [title, setTitle] = useState(block.title || "");
@@ -129,6 +131,7 @@ export default function DayBlockItem({ block }) {
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     onBlur={saveTitle}
+                    readOnly={!canEdit}
                     onKeyDown={(e) =>
                         e.key === "Enter" && e.currentTarget.blur()
                     }
@@ -142,13 +145,15 @@ export default function DayBlockItem({ block }) {
                     </span>
                 )}
 
-                <button
-                    onClick={handleDelete}
-                    title="Supprimer"
-                    className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors"
-                >
-                    <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {canEdit && (
+                    <button
+                        onClick={handleDelete}
+                        title="Supprimer"
+                        className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                )}
             </div>
 
             {/* Pense-bête */}
@@ -160,6 +165,7 @@ export default function DayBlockItem({ block }) {
                     placeholder="Écrire un pense-bête (code Wi-Fi, astuce, rappel…)"
                     rows={3}
                     className={`${inputClass} resize-none`}
+                    readOnly={!canEdit}
                 />
             )}
 
@@ -174,6 +180,7 @@ export default function DayBlockItem({ block }) {
                         onBlur={saveFields}
                         placeholder="Lien (Airbnb, billet de concert, train…)"
                         className={inputClass}
+                        readOnly={!canEdit}
                     />
 
                     <div className="grid grid-cols-2 gap-2">
@@ -186,6 +193,7 @@ export default function DayBlockItem({ block }) {
                             onBlur={saveFields}
                             placeholder="N° de réservation"
                             className={inputClass}
+                            readOnly={!canEdit}
                         />
                         <input
                             type="time"
@@ -193,6 +201,7 @@ export default function DayBlockItem({ block }) {
                             onChange={(e) => setField("time", e.target.value)}
                             onBlur={saveFields}
                             className={inputClass}
+                            readOnly={!canEdit}
                         />
                     </div>
 
@@ -275,6 +284,7 @@ export default function DayBlockItem({ block }) {
                             value={draftText}
                             onChange={(e) => setDraftText(e.target.value)}
                             onKeyDown={onEnter}
+                            readOnly={!canEdit}
                             placeholder={
                                 block.type === "budget"
                                     ? "Dépense (ex: Resto)…"
@@ -290,6 +300,7 @@ export default function DayBlockItem({ block }) {
                                 value={draftAmount}
                                 onChange={(e) => setDraftAmount(e.target.value)}
                                 onKeyDown={onEnter}
+                                readOnly={!canEdit}
                                 placeholder="€"
                                 className="w-16 text-xs bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-lg px-2 py-1.5 focus:ring-1 focus:ring-indigo-500 text-slate-700 dark:text-slate-200"
                             />
@@ -297,7 +308,8 @@ export default function DayBlockItem({ block }) {
 
                         <button
                             onClick={addItem}
-                            className="px-2 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 transition-colors"
+                            disabled={!canEdit}
+                            className="px-2 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <Plus className="w-3.5 h-3.5" />
                         </button>

@@ -16,6 +16,7 @@ import PeriodSlot from "./PeriodSlot";
 import DayBlockItem from "./DayBlockItem";
 import { BLOCK_TYPES } from "@/Constants/dayBlocks";
 import { formatDate } from "@/Utils/formatters";
+import { useTripPermissions } from "@/Contexts/TripPermissionsContext";
 
 const DAY_BORDER_COLORS = [
     "border-l-indigo-500",
@@ -44,6 +45,7 @@ export default function DayCard({ day, dayNumber, dayIndex = 0 }) {
     const visiblePeriods = PERIODS.filter(
         (p) => !hiddenPeriods.includes(p.key),
     );
+    const { canEdit } = useTripPermissions();
 
     const borderColorClass =
         DAY_BORDER_COLORS[dayIndex % DAY_BORDER_COLORS.length];
@@ -67,6 +69,7 @@ export default function DayCard({ day, dayNumber, dayIndex = 0 }) {
 
     // Gestion du Drag & Drop global pour la journée
     const handleDragEnd = (result) => {
+        if (!canEdit) return;
         const { destination, source, draggableId } = result;
 
         if (!destination) return;
@@ -115,9 +118,18 @@ export default function DayCard({ day, dayNumber, dayIndex = 0 }) {
 
                     <div className="relative">
                         <button
-                            onClick={() => setShowMenu((v) => !v)}
-                            title="Composer la journée"
-                            className="flex items-center gap-1.5 text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 px-3 py-2 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-950 transition-colors"
+                            onClick={() => canEdit && setShowMenu((v) => !v)}
+                            disabled={!canEdit}
+                            title={
+                                canEdit
+                                    ? "Composer la journée"
+                                    : "Lecture seule"
+                            }
+                            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl transition-colors ${
+                                canEdit
+                                    ? "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-950"
+                                    : "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed"
+                            }`}
                         >
                             <Plus className="w-4 h-4" />
                             Ajouter
@@ -139,26 +151,18 @@ export default function DayCard({ day, dayNumber, dayIndex = 0 }) {
                                             !hiddenPeriods.includes(key);
                                         return (
                                             <button
-                                                key={key}
                                                 onClick={() =>
-                                                    setPeriodHidden(
-                                                        key,
-                                                        visible,
-                                                    )
+                                                    canEdit &&
+                                                    setPeriodHidden(key, true)
                                                 }
-                                                className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center gap-3"
+                                                disabled={!canEdit}
+                                                className={`absolute -top-2 -right-2 z-10 w-6 h-6 rounded-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 shadow-sm flex items-center justify-center transition-opacity md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 ${
+                                                    canEdit
+                                                        ? "text-slate-400 hover:text-red-500"
+                                                        : "text-slate-300 cursor-not-allowed"
+                                                }`}
                                             >
-                                                <span
-                                                    className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${visible ? "bg-indigo-600 border-indigo-600 text-white" : "border-slate-300 dark:border-slate-600"}`}
-                                                >
-                                                    {visible && (
-                                                        <Check className="w-3 h-3" />
-                                                    )}
-                                                </span>
-                                                <Icon className="w-4 h-4 text-amber-500" />
-                                                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                                                    {label}
-                                                </span>
+                                                <EyeOff className="w-3 h-3" />
                                             </button>
                                         );
                                     })}

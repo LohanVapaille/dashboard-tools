@@ -1,11 +1,10 @@
 <?php
 
 namespace App\Http\Controllers;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use App\Models\Trip;
-use App\Models\TripUser;
-use App\Models\TripMember;
+use App\Models\TripParticipant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
@@ -14,40 +13,51 @@ use Inertia\Inertia;
 class TripController extends Controller
 {
     use AuthorizesRequests;
+
+    // Nombre maximum de voyages (créés + rejoints) pour un utilisateur sans compte
+    private const GUEST_TRIP_LIMIT = 3;
+
     public function index(Request $request)
     {
         $user = Auth::user();
         $guestToken = $request->cookie('guest_token');
 
-        $trips = Trip::withCount('stays')
-            ->when($user, function ($query, $user) {
-                // 1. Si l'utilisateur est connecté :
-                // Ses propres voyages OU les voyages où il participe via la table pivot
-                $query->where('user_id', $user->id)
-                    ->orWhereHas('users', fn($q) => $q->where('users.id', $user->id));
-            }, function ($query) use ($guestToken) {
-                // 2. Si c'est un invité :
-                // Uniquement si un guest_token existe, sinon collection vide pour ne rien fuiter
-                if (!$guestToken) {
-                    // Force une requête qui ne retourne rien si aucun cookie invité n'est présent
-                    $query->whereRaw('1 = 0');
-                    return;
-                }
+        $owned = $user
+            ? Trip::withCount('stays')->where('user_id', $user->id)->orderBy('start_date', 'desc')->get()
+            : ($guestToken
+                ? Trip::withCount('stays')->where('guest_token', $guestToken)->orderBy('start_date', 'desc')->get()
+                : collect());
 
-                // Les voyages créés par cet invité (guest_token) OU rejoints (via trip_users)
-                $query->where('guest_token', $guestToken)
-                    ->orWhereHas('tripUsers', fn($q) => $q->where('guest_token', $guestToken));
+        $joinedQuery = Trip::withCount('stays')->where('user_id', '!=', $user?->id ?? 0);
+
+        if ($user) {
+            $joinedQuery->whereHas('participants', fn($q) => $q->where('user_id', $user->id))
+                ->with(['participants' => fn($q) => $q->where('user_id', $user->id)]);
+        } elseif ($guestToken) {
+            $joinedQuery->where(function ($q) use ($guestToken) {
+                $q->where('guest_token', '!=', $guestToken)->orWhereNull('guest_token');
             })
-            ->orderBy('start_date', 'desc')
-            ->get();
+                ->whereHas('participants', fn($q) => $q->where('guest_token', $guestToken))
+                ->with(['participants' => fn($q) => $q->where('guest_token', $guestToken)]);
+        } else {
+            $joinedQuery->whereRaw('1 = 0');
+        }
+
+        $joined = $joinedQuery->orderBy('start_date', 'desc')->get()->map(function ($trip) {
+            $trip->my_role = $trip->participants->first()?->role;
+            unset($trip->participants);
+            return $trip;
+        });
 
         return Inertia::render('Trips/Index', [
-            'trips' => $trips,
+            'ownedTrips' => $owned,
+            'joinedTrips' => $joined,
+            'guestTripsRemaining' => $user ? null : max(0, self::GUEST_TRIP_LIMIT - $this->guestTripCount($guestToken)),
         ]);
     }
+
     public function store(Request $request)
     {
-        // Valider les données du voyage
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -59,92 +69,65 @@ class TripController extends Controller
         $user = Auth::user();
         $guestToken = $request->cookie('guest_token');
 
-        // Si l'utilisateur n'est ni connecté ni muni d'un guest_token, on en crée un
         if (!$user && !$guestToken) {
             $guestToken = (string) Str::uuid();
             cookie()->queue('guest_token', $guestToken, 60 * 24 * 365);
         }
 
-        // Création du voyage (Privé par défaut : is_private => true)
+        if (!$user && $this->guestTripCount($guestToken) >= self::GUEST_TRIP_LIMIT) {
+            return back()->withErrors([
+                'guest_limit' => 'Vous avez atteint la limite de ' . self::GUEST_TRIP_LIMIT . ' voyages sans compte. Créez un compte gratuit pour continuer.',
+            ]);
+        }
+
         $trip = Trip::create([
-            'title' => $validated['title'],
-            'description' => $validated['description'] ?? null,
-            'start_date' => $validated['start_date'],
-            'end_date' => $validated['end_date'],
-            'cover_image' => $validated['cover_image'] ?? null,
+            ...$validated,
             'user_id' => $user?->id,
             'guest_token' => $user ? null : $guestToken,
-            'is_private' => true, // Privé par défaut
-            'share_token' => Str::random(32),
+            'is_private' => true,
         ]);
 
-        // Lier le créateur en tant qu'admin dans la table pivot trip_user
-        TripUser::create([
-            'trip_id' => $trip->id,
-            'user_id' => $user?->id,
-            'guest_token' => $user ? null : $guestToken,
-            'role' => 'admin',
-        ]);
+        $redirect = redirect()->route('trips.show', $trip->id);
 
-        return redirect()->route('trips.show', $trip->id);
+        if (!$user) {
+            $redirect->with('guestWarning', [
+                'remaining' => max(0, self::GUEST_TRIP_LIMIT - $this->guestTripCount($guestToken)),
+            ]);
+        }
+
+        return $redirect;
     }
 
     public function show(Trip $trip)
     {
         $this->authorize('view', $trip);
 
-        $trip->load(['stays.days.activities', 'stays.days.blocks', 'transitions', 'users']);
+        $user = Auth::user();
+        $guestToken = request()->cookie('guest_token');
+
+        $trip->load(['stays.days.activities', 'stays.days.blocks', 'transitions', 'participants.user:id,name']);
+
+        $trip->permissions = [
+            'isOwner' => $trip->isOwner($user, $guestToken),
+            'role' => $trip->roleFor($user, $guestToken),
+            'canEdit' => $trip->canEdit($user, $guestToken),
+            'canViewShareLink' => $trip->canViewShareLink($user, $guestToken),
+            'canManageAccess' => $trip->canManageAccess($user, $guestToken),
+            'canManageRoles' => $trip->canManageRoles($user, $guestToken),
+        ];
+
+        $trip->avatars = $trip->participants
+            ->where('status', 'accepted')
+            ->map(fn($p) => [
+                'id' => $p->id,
+                'name' => $p->user->name ?? ($p->email ?? 'Invité'),
+                'role' => $p->role,
+            ])->values();
 
         return Inertia::render('Trips/Show', [
             'trip' => $trip,
+            'guestWarning' => session('guestWarning'),
         ]);
-    }
-
-    // Récupérer la liste des membres et le lien de partage pour la modale
-    // Récupérer la liste des membres et le lien de partage pour la modale
-    public function members(Trip $trip)
-    {
-        $this->authorize('update', $trip);
-
-        $members = $trip->members()->with('user:id,name,email')->get()->map(function ($member) {
-            return [
-                'id' => $member->id,
-                'name' => $member->user->name ?? 'Invité par email',
-                'email' => $member->user->email ?? $member->email,
-                'role' => $member->role,
-                'status' => $member->status,
-                'type' => $member->user_id ? 'user' : 'guest'
-            ];
-        });
-
-        return response()->json([
-            'members' => $members,
-            'share_url' => route('trips.invite.show', $trip->share_token),
-        ]);
-    }
-
-    // Modifier le rôle d'un membre (editor / viewer)
-    public function updateMemberRole(Request $request, Trip $trip, $memberId)
-    {
-        $this->authorize('update', $trip);
-
-        $request->validate(['role' => 'required|in:editor,viewer']);
-
-        $member = TripMember::where('trip_id', $trip->id)->where('id', $memberId)->firstOrFail();
-        $member->update(['role' => $request->role]);
-
-        return back();
-    }
-
-    // Supprimer l'accès d'un membre
-    public function removeMember(Trip $trip, $memberId)
-    {
-        $this->authorize('update', $trip);
-
-        $member = TripMember::where('trip_id', $trip->id)->where('id', $memberId)->firstOrFail();
-        $member->delete();
-
-        return back();
     }
 
     public function update(Request $request, Trip $trip)
@@ -166,13 +149,24 @@ class TripController extends Controller
     public function destroy(Trip $trip)
     {
         $this->authorize('delete', $trip);
-
         $trip->delete();
-
         return redirect()->route('trips.index');
     }
 
-    // Dans TripController.php (méthode join)
+    public function leave(Trip $trip, Request $request)
+    {
+        $user = Auth::user();
+        $guestToken = $request->cookie('guest_token');
+
+        abort_if($trip->isOwner($user, $guestToken), 403, 'Le propriétaire ne peut pas quitter son propre voyage.');
+
+        TripParticipant::where('trip_id', $trip->id)
+            ->when($user, fn($q) => $q->where('user_id', $user->id))
+            ->when(!$user, fn($q) => $q->where('guest_token', $guestToken))
+            ->delete();
+
+        return redirect()->route('trips.index');
+    }
 
     public function join($share_token, Request $request)
     {
@@ -181,38 +175,80 @@ class TripController extends Controller
         $user = $request->user();
         $guestToken = $request->cookie('guest_token');
 
-        $existingParticipation = TripUser::where('trip_id', $trip->id)
+        if (!$user && !$guestToken) {
+            $guestToken = (string) Str::uuid();
+            cookie()->queue('guest_token', $guestToken, 60 * 24 * 365);
+        }
+
+        if ($trip->isOwner($user, $guestToken)) {
+            return redirect()->route('trips.show', $trip->id);
+        }
+
+        $existing = TripParticipant::where('trip_id', $trip->id)
             ->when($user, fn($q) => $q->where('user_id', $user->id))
             ->when(!$user, fn($q) => $q->where('guest_token', $guestToken))
             ->first();
 
-        if (!$existingParticipation) {
-            // Forcer le rôle 'viewer' si l'utilisateur n'a pas de compte (invité)
-            // Les utilisateurs connectés via le lien obtiennent 'editor' ou 'viewer' selon ton choix (ici 'viewer' par sécurité, ou 'editor' si le lien donne les droits d'édition)
-            $role = $user ? 'editor' : 'viewer';
+        if (!$existing) {
+            if (!$user && $this->guestTripCount($guestToken) >= self::GUEST_TRIP_LIMIT) {
+                return redirect()->route('trips.index')->withErrors([
+                    'guest_limit' => 'Vous avez atteint la limite de ' . self::GUEST_TRIP_LIMIT . ' voyages sans compte. Créez un compte gratuit pour rejoindre plus de voyages.',
+                ]);
+            }
 
-            TripUser::create([
+            TripParticipant::create([
                 'trip_id' => $trip->id,
                 'user_id' => $user?->id,
                 'guest_token' => $user ? null : $guestToken,
-                'role' => $role,
+                'role' => 'viewer',
+                'status' => 'accepted',
             ]);
         }
 
-        return redirect()->route('trips.show', $trip->id);
+        $redirect = redirect()->route('trips.show', $trip->id);
+
+        if (!$user) {
+            $redirect->with('guestWarning', [
+                'remaining' => max(0, self::GUEST_TRIP_LIMIT - $this->guestTripCount($guestToken)),
+            ]);
+        }
+
+        return $redirect;
     }
 
-    public function generateShareLink(Trip $trip, Request $request)
+    // Récupère juste l'URL du lien : owner, admin, editor
+    public function shareLink(Trip $trip)
     {
-        $this->authorize('update', $trip);
+        $this->authorize('viewShareLink', $trip);
+
+        return response()->json([
+            'share_url' => route('trips.join', $trip->share_token),
+        ]);
+    }
+
+    // Régénère le token de partage : owner, admin
+    public function generateShareLink(Trip $trip)
+    {
+        $this->authorize('manageAccess', $trip);
 
         if (!$trip->share_token) {
             $trip->share_token = Str::random(32);
             $trip->save();
         }
 
-        return response()->json([
-            'share_url' => route('trips.join', $trip->share_token)
-        ]);
+        return response()->json(['share_url' => route('trips.join', $trip->share_token)]);
+    }
+
+    // Total de voyages d'un invité : ceux qu'il possède + ceux qu'il a rejoints
+    private function guestTripCount(?string $guestToken): int
+    {
+        if (!$guestToken) {
+            return 0;
+        }
+
+        $owned = Trip::where('guest_token', $guestToken)->count();
+        $joined = TripParticipant::where('guest_token', $guestToken)->distinct('trip_id')->count('trip_id');
+
+        return $owned + $joined;
     }
 }

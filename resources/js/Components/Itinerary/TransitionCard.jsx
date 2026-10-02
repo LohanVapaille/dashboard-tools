@@ -2,8 +2,10 @@ import React from "react";
 import { router } from "@inertiajs/react";
 import { ArrowDown, Trash2 } from "lucide-react";
 import DynamicIcon from "./DynamicIcon";
+import { useTripPermissions } from "@/Contexts/TripPermissionsContext";
 
 export default function TransitionCard({ transition }) {
+    const { canEdit } = useTripPermissions();
     const handleDelete = () => {
         if (confirm("Supprimer cette étape de transport ?")) {
             router.delete(route("transitions.destroy", transition.id));
@@ -23,12 +25,14 @@ export default function TransitionCard({ transition }) {
                     <span>• {transition.duration_minutes} min</span>
                 )}
                 {transition.cost > 0 && <span>• {transition.cost} €</span>}
-                <button
-                    onClick={handleDelete}
-                    className="ml-2 hover:text-red-200 transition"
-                >
-                    <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {canEdit && (
+                    <button
+                        onClick={handleDelete}
+                        className="ml-2 hover:text-red-200 transition"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                )}
             </div>
         </div>
     );
