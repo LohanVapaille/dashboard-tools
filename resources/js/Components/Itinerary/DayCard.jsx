@@ -150,20 +150,32 @@ export default function DayCard({ day, dayNumber, dayIndex = 0 }) {
                                         const visible =
                                             !hiddenPeriods.includes(key);
                                         return (
-                                            <button
-                                                onClick={() =>
-                                                    canEdit &&
-                                                    setPeriodHidden(key, true)
-                                                }
-                                                disabled={!canEdit}
-                                                className={`absolute -top-2 -right-2 z-10 w-6 h-6 rounded-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 shadow-sm flex items-center justify-center transition-opacity md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 ${
+                                            <label
+                                                key={key}
+                                                className={`flex items-center gap-3 px-4 py-2 ${
                                                     canEdit
-                                                        ? "text-slate-400 hover:text-red-500"
-                                                        : "text-slate-300 cursor-not-allowed"
+                                                        ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                                                        : "cursor-not-allowed opacity-60"
                                                 }`}
                                             >
-                                                <EyeOff className="w-3 h-3" />
-                                            </button>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={visible}
+                                                    disabled={!canEdit}
+                                                    onChange={(event) =>
+                                                        setPeriodHidden(
+                                                            key,
+                                                            !event.target
+                                                                .checked,
+                                                        )
+                                                    }
+                                                    className="rounded cursor-pointer border-slate-300 text-indigo-600 shadow-sm focus:ring-indigo-500 disabled:cursor-not-allowed"
+                                                />
+                                                <Icon className="w-4 h-4 text-slate-400" />
+                                                <span className="text-xs font-medium text-slate-700 dark:text-slate-200">
+                                                    {label}
+                                                </span>
+                                            </label>
                                         );
                                     })}
 
