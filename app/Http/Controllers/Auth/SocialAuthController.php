@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Trip;
-use App\Models\TripUser;
+use App\Models\TripParticipant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
@@ -70,7 +70,7 @@ class SocialAuthController extends Controller
             ]);
 
             // Rattacher les participations (rôles) anonymes
-            TripUser::where('guest_token', $guestToken)->update([
+            TripParticipant::where('guest_token', $guestToken)->update([
                 'user_id' => $user->id,
                 'guest_token' => null
             ]);
