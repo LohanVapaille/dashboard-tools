@@ -1,0 +1,4 @@
+deployment:
+  tasks:
+    - export DeploymentPath=/home/vapaille/public_html
+    - /bin/cp -R * $DeploymentPath
