@@ -45,7 +45,14 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'subscription_ends_at' => 'datetime',
         ];
+    }
+
+    public function hasPremiumAccess(): bool
+    {
+        return in_array($this->subscription_status, ['active', 'trialing'], true)
+            && (!$this->subscription_ends_at || $this->subscription_ends_at->isFuture());
     }
 
     public function trips()

@@ -39,5 +39,17 @@ return [
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
         'redirect' => env('GOOGLE_REDIRECT_URL'),
     ],
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-flash-latest'),
+        'rate_limit_per_minute' => env('GEMINI_RATE_LIMIT_PER_MINUTE', 2),
+        'free_daily_limit' => env('GEMINI_FREE_DAILY_LIMIT', 3),
+        'premium_daily_limit' => env('GEMINI_PREMIUM_DAILY_LIMIT', 1000),
+    ],
+    'stripe' => [
+        'secret' => env('STRIPE_SECRET'),
+        'price_id' => env('STRIPE_PRICE_ID'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+    ],
 
 ];
