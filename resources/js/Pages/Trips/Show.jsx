@@ -25,19 +25,23 @@ import {
     Copy,
     Check,
     Trash2,
+    Sparkles,
 } from "lucide-react";
 import axios from "axios";
+import AIItineraryModal from "@/Components/Itinerary/AIItineraryModal";
 
 function ShowContent({ trip }) {
     const { canEdit, canViewShareLink, canManageAccess, canManageRoles } =
         useTripPermissions();
 
     const { props } = usePage();
+    const authenticated = Boolean(props.auth?.user);
     const [guestWarning, setGuestWarning] = useState(
         props.guestWarning ?? null,
     );
 
     const [isAddingStay, setIsAddingStay] = useState(false);
+    const [isAIItineraryOpen, setIsAIItineraryOpen] = useState(false);
     const [arrivalDate, setArrivalDate] = useState("");
     const [departureDate, setDepartureDate] = useState("");
     const [locationData, setLocationData] = useState({
@@ -243,6 +247,17 @@ function ShowContent({ trip }) {
 
     return (
         <>
+            {isAIItineraryOpen && (
+                <AIItineraryModal
+                    trip={trip}
+                    authenticated={authenticated}
+                    onClose={() => setIsAIItineraryOpen(false)}
+                    onStored={() => {
+                        setIsAIItineraryOpen(false);
+                        router.reload({ preserveScroll: true });
+                    }}
+                />
+            )}
             {guestWarning && (
                 <GuestLimitModal
                     remaining={guestWarning.remaining}
@@ -334,9 +349,19 @@ function ShowContent({ trip }) {
                     </div>
 
                     <div className="space-y-4">
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white px-1">
-                            Programme du voyage
-                        </h2>
+                        <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                                Programme du voyage
+                            </h2>
+                            <button
+                                onClick={() => setIsAIItineraryOpen(true)}
+                                disabled={!canEdit}
+                                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <Sparkles className="h-4 w-4" />
+                                Suggérer avec l'IA
+                            </button>
+                        </div>
                         {trip.stays && trip.stays.length > 0 ? (
                             trip.stays.map((stay, index) => {
                                 const transition = trip.transitions?.find(

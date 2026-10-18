@@ -19,6 +19,7 @@ class ActivityController extends Controller
             'price' => 'nullable|numeric|min:0',
             'description' => 'nullable|string',
             'location_name' => 'nullable|string',
+            'source_url' => 'nullable|url:http,https|max:2048',
         ]);
 
         // Crée et récupère l'activité fraîchement insérée
@@ -37,6 +38,7 @@ class ActivityController extends Controller
             'price' => 'nullable|numeric|min:0',
             'description' => 'nullable|string',
             'location_name' => 'nullable|string',
+            'source_url' => 'nullable|url:http,https|max:2048',
         ]);
 
         $activity->update($validated);

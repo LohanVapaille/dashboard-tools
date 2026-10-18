@@ -23,6 +23,8 @@ use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\TripMemberController;
 use App\Http\Controllers\TripInviteController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\AIItineraryController;
+use App\Http\Controllers\SubscriptionController;
 
 Route::middleware('guest')->group(function () {
     Route::get('register', [RegisteredUserController::class, 'create'])->name('register');
@@ -81,7 +83,12 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::delete('/trips/{trip}/leave', [TripController::class, 'leave'])->name('trips.leave');
+    Route::get('/premium', [SubscriptionController::class, 'show'])->name('billing.show');
+    Route::post('/premium/checkout', [SubscriptionController::class, 'checkout'])->name('billing.checkout');
+    Route::get('/premium/success', [SubscriptionController::class, 'success'])->name('billing.success');
 });
+
+Route::post('/stripe/webhook', [SubscriptionController::class, 'webhook'])->name('stripe.webhook');
 
 Route::get('/', fn() => redirect()->route('trips.index'));
 Route::get('/dashboard', fn() => redirect()->route('trips.index'))->name('dashboard');
@@ -92,6 +99,10 @@ Route::resource('trips', TripController::class);
 
 // Édition d'itinéraire — admin/editor/owner uniquement, appliqué une seule fois
 Route::middleware('check.trip.access:edit')->group(function () {
+    Route::post('/trips/{trip}/ai-itinerary/generate', [AIItineraryController::class, 'generate'])
+        ->middleware(['auth', 'throttle:ai-itinerary'])->name('trips.ai-itinerary.generate');
+    Route::post('/trips/{trip}/ai-itinerary/store', [AIItineraryController::class, 'store'])
+        ->middleware(['auth', 'throttle:30,1'])->name('trips.ai-itinerary.store');
     Route::post('/trips/{trip}/notes', [TripNoteController::class, 'store'])->name('trip-notes.store');
     Route::patch('/trip-notes/{tripNote}', [TripNoteController::class, 'update'])->name('trip-notes.update');
     Route::delete('/trip-notes/{tripNote}', [TripNoteController::class, 'destroy'])->name('trip-notes.destroy');

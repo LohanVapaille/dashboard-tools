@@ -1,6 +1,6 @@
 import React from "react";
 import axios from "axios";
-import { Trash2, MapPin } from "lucide-react";
+import { Trash2, MapPin, ExternalLink } from "lucide-react";
 import DynamicIcon from "./DynamicIcon";
 import { useTripPermissions } from "@/Contexts/TripPermissionsContext";
 
@@ -56,6 +56,17 @@ export default function ActivityItem({ activity, onDelete }) {
                                 {activity.location_name}
                             </span>
                         </span>
+                    )}
+                    {activity.source_url && (
+                        <a
+                            href={activity.source_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-[10px] text-indigo-600 hover:underline dark:text-indigo-400 mt-1"
+                        >
+                            <ExternalLink className="w-3 h-3" />
+                            Site / réservation
+                        </a>
                     )}
                 </div>
             </div>
