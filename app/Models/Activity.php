@@ -15,6 +15,7 @@ class Activity extends Model
         'price',
         'location_name',
         'source_url',
+        'start_time',
         'latitude',
         'longitude',
         'time',
