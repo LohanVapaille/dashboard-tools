@@ -24,7 +24,13 @@ use App\Http\Controllers\TripMemberController;
 use App\Http\Controllers\TripInviteController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\AIItineraryController;
+use App\Http\Controllers\TripPhotoController;
+use App\Http\Controllers\TripTabController;
 use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\TravelSearchController;
+use App\Http\Controllers\FlightCartController;
+use App\Http\Controllers\FlightCheckoutController;
+use App\Http\Controllers\FlightOrderController;
 
 Route::middleware('guest')->group(function () {
     Route::get('register', [RegisteredUserController::class, 'create'])->name('register');
@@ -83,12 +89,43 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::delete('/trips/{trip}/leave', [TripController::class, 'leave'])->name('trips.leave');
+    Route::patch('/trips/{trip}/tabs', [TripTabController::class, 'update'])->name('trips.tabs.update');
+    Route::post('/trips/{trip}/photos', [TripPhotoController::class, 'store'])->name('trips.photos.store');
+    Route::delete('/trip-photos/{photo}', [TripPhotoController::class, 'destroy'])->name('trips.photos.destroy');
+    Route::post('/trips/{trip}/travel-search/lodgings', [TravelSearchController::class, 'lodgings'])->name('trips.travel-search.lodgings');
+
+    // Panier et achat de billets d'avion
+    Route::get('/panier', [FlightCartController::class, 'index'])->name('flights.cart.index');
+    Route::post('/panier/vols', [FlightCartController::class, 'store'])->middleware('throttle:20,1')->name('flights.cart.store');
+    Route::delete('/panier/vols/{item}', [FlightCartController::class, 'destroy'])->name('flights.cart.destroy');
+    Route::delete('/panier', [FlightCartController::class, 'clear'])->name('flights.cart.clear');
+    Route::post('/panier/paiement', [FlightCheckoutController::class, 'store'])->middleware('throttle:10,1')->name('flights.checkout.store');
+    Route::get('/reservations/{order}/paiement-confirme', [FlightCheckoutController::class, 'success'])->name('flights.checkout.success');
+
+    Route::get('/reservations', [FlightOrderController::class, 'index'])->name('flights.orders.index');
+    Route::get('/reservations/{order}', [FlightOrderController::class, 'show'])->name('flights.orders.show');
+    Route::get('/reservations/{order}/statut', [FlightOrderController::class, 'status'])->name('flights.orders.status');
+    Route::post('/reservations/{order}/billets/{booking}/devis-annulation', [FlightOrderController::class, 'cancellationQuote'])->middleware('throttle:10,1')->name('flights.bookings.cancellation-quote');
+    Route::post('/reservations/{order}/billets/{booking}/annulation', [FlightOrderController::class, 'cancel'])->name('flights.bookings.cancel');
+    Route::post('/reservations/{order}/billets/{booking}/remboursement-taxes', [FlightOrderController::class, 'requestTaxRefund'])->name('flights.bookings.tax-refund');
+
     Route::get('/premium', [SubscriptionController::class, 'show'])->name('billing.show');
     Route::post('/premium/checkout', [SubscriptionController::class, 'checkout'])->name('billing.checkout');
     Route::get('/premium/success', [SubscriptionController::class, 'success'])->name('billing.success');
 });
 
 Route::post('/stripe/webhook', [SubscriptionController::class, 'webhook'])->name('stripe.webhook');
+Route::post('/stripe/flights/webhook', [FlightCheckoutController::class, 'webhook'])->name('stripe.flights.webhook');
+
+// Recherche de vols : accessible aussi aux invités d'un voyage
+Route::get('/flights/airports', [TravelSearchController::class, 'airports'])->middleware('throttle:120,1')->name('flights.airports');
+Route::get('/flights/airports/nearest', [TravelSearchController::class, 'nearestAirports'])->middleware('throttle:30,1')->name('flights.airports.nearest');
+Route::post('/trips/{trip}/travel-search/flights', [TravelSearchController::class, 'flights'])->middleware('throttle:20,1')->name('trips.travel-search.flights');
+Route::get('/conditions-de-vente-vols', fn () => Inertia\Inertia::render('Flights/Terms', [
+    'seller' => config('flights.seller'),
+    'feePercent' => App\Services\Flights\FlightPricing::percent(),
+    'feeLabel' => config('flights.tax_label'),
+]))->name('flights.terms');
 
 Route::get('/', fn() => redirect()->route('trips.index'));
 Route::get('/dashboard', fn() => redirect()->route('trips.index'))->name('dashboard');

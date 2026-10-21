@@ -15,10 +15,12 @@ class Trip extends Model
         'user_id',
         'guest_token',
         'is_private',
+        'visible_tabs',
     ];
 
     protected $casts = [
         'is_private' => 'boolean',
+        'visible_tabs' => 'array',
     ];
 
     public function user()
@@ -44,6 +46,11 @@ class Trip extends Model
     public function participants()
     {
         return $this->hasMany(TripParticipant::class);
+    }
+
+    public function photos()
+    {
+        return $this->hasMany(TripPhoto::class)->latest();
     }
 
     protected static function booted()

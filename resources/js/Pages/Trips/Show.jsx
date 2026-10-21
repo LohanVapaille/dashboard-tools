@@ -1,10 +1,8 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Head, Link, router, useForm, usePage } from "@inertiajs/react";
 import GuestLayout from "@/Layouts/GuestLayout";
 import TripMap from "@/Components/TripMap";
-import StayCard from "@/Components/Itinerary/StayCard";
 import TripNotes from "@/Components/Itinerary/TripNotes";
-import TransitionCard from "@/Components/Itinerary/TransitionCard";
 import LocationSearchInput from "@/Components/Itinerary/LocationSearchInput";
 import GuestLimitModal from "@/Components/GuestLimitModal";
 import AvatarStack from "@/Components/AvatarStack";
@@ -25,10 +23,18 @@ import {
     Copy,
     Check,
     Trash2,
-    Sparkles,
+    Bus,
+    BedDouble,
+    Image,
+    SlidersHorizontal,
 } from "lucide-react";
 import axios from "axios";
 import AIItineraryModal from "@/Components/Itinerary/AIItineraryModal";
+import ProgramTab from "@/Components/Itinerary/ProgramTab";
+import TransportTab from "@/Components/Itinerary/TransportTab";
+import StaysTab from "@/Components/Itinerary/StaysTab";
+import PhotosTab from "@/Components/Itinerary/PhotosTab";
+import DateRangePicker from "@/Components/DateRangePicker";
 
 function ShowContent({ trip }) {
     const { canEdit, canViewShareLink, canManageAccess, canManageRoles } =
@@ -42,6 +48,12 @@ function ShowContent({ trip }) {
 
     const [isAddingStay, setIsAddingStay] = useState(false);
     const [isAIItineraryOpen, setIsAIItineraryOpen] = useState(false);
+    const defaultTabs = ["program", "transport", "stays", "photos"];
+    const [visibleTabs, setVisibleTabs] = useState(
+        trip.visible_tabs?.length ? trip.visible_tabs : defaultTabs,
+    );
+    const [activeTab, setActiveTab] = useState("program");
+    const [isTabSettingsOpen, setIsTabSettingsOpen] = useState(false);
     const [arrivalDate, setArrivalDate] = useState("");
     const [departureDate, setDepartureDate] = useState("");
     const [locationData, setLocationData] = useState({
@@ -269,7 +281,9 @@ function ShowContent({ trip }) {
                 <Head title={trip.title} />
 
                 <div className="py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-                    <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 overflow-hidden bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                        <div className="pointer-events-none absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-sky-400 via-indigo-500 to-fuchsia-500" />
+                        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-indigo-200/40 to-fuchsia-200/30 blur-2xl dark:from-indigo-500/10 dark:to-fuchsia-500/10" />
                         <div className="absolute top-4 right-4 flex items-center gap-3">
                             {trip.avatars?.length > 0 && (
                                 <AvatarStack people={trip.avatars} />
@@ -333,7 +347,7 @@ function ShowContent({ trip }) {
                             title={canEdit ? undefined : "Lecture seule"}
                             className={`text-sm font-bold px-5 py-3 rounded-xl shadow-md flex items-center gap-2 transition shrink-0 ${
                                 canEdit
-                                    ? "bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white cursor-pointer"
+                                    ? "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-indigo-500/30 text-white cursor-pointer"
                                     : "bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed"
                             }`}
                         >
@@ -348,65 +362,83 @@ function ShowContent({ trip }) {
                         <TripMap stays={trip.stays || []} />
                     </div>
 
-                    <div className="space-y-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3 px-1">
-                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-                                Programme du voyage
-                            </h2>
+                    <div className="flex flex-wrap items-end gap-1 border-b border-slate-200 dark:border-slate-700">
+                        {[
+                            ["program", "Programme", Calendar, "text-indigo-600 dark:text-indigo-400", "bg-indigo-500"],
+                            ["transport", "Transports", Bus, "text-sky-600 dark:text-sky-400", "bg-sky-500"],
+                            ["stays", "Logements", BedDouble, "text-emerald-600 dark:text-emerald-400", "bg-emerald-500"],
+                            ["photos", "Photos", Image, "text-rose-600 dark:text-rose-400", "bg-rose-500"],
+                        ].filter(([key]) => visibleTabs.includes(key)).map(([key, label, Icon, activeText, bar]) => (
                             <button
-                                onClick={() => setIsAIItineraryOpen(true)}
-                                disabled={!canEdit}
-                                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                key={key}
+                                onClick={() => setActiveTab(key)}
+                                className={`relative -mb-px inline-flex items-center gap-2 overflow-hidden rounded-t-lg border px-4 py-3 text-sm font-semibold transition ${activeTab === key ? `border-slate-200 border-b-white bg-white ${activeText} dark:border-slate-700 dark:border-b-slate-800 dark:bg-slate-800` : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-700/50"}`}
                             >
-                                <Sparkles className="h-4 w-4" />
-                                Suggérer avec l'IA
+                                {activeTab === key && <span className={`absolute inset-x-0 top-0 h-0.5 ${bar}`} />}
+                                <Icon className={`h-4 w-4 ${activeTab === key ? "" : activeText}`} /> {label}
                             </button>
-                        </div>
-                        {trip.stays && trip.stays.length > 0 ? (
-                            trip.stays.map((stay, index) => {
-                                const transition = trip.transitions?.find(
-                                    (t) => t.from_stay_id === stay.id,
-                                );
-                                return (
-                                    <React.Fragment key={stay.id}>
-                                        <StayCard
-                                            stay={stay}
-                                            index={index}
-                                            onEdit={() =>
-                                                handleOpenEditStay(stay)
-                                            }
-                                        />
-                                        {transition && (
-                                            <TransitionCard
-                                                transition={transition}
-                                            />
-                                        )}
-                                    </React.Fragment>
-                                );
-                            })
-                        ) : (
-                            <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700">
-                                <MapPin className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-                                <h3 className="text-base font-semibold text-slate-700 dark:text-slate-200">
-                                    Aucun séjour planifié
-                                </h3>
-                                <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                                    Commencez à construire votre itinéraire en
-                                    ajoutant votre première destination.
-                                </p>
-                                {canEdit && (
-                                    <button
-                                        onClick={handleOpenAddStay}
-                                        className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
-                                    >
-                                        <Plus className="w-4 h-4" />
-                                        Ajouter une destination
-                                    </button>
-                                )}
-                            </div>
+                        ))}
+                        {canEdit && (
+                            <button onClick={() => setIsTabSettingsOpen(true)} className="ml-auto mb-2 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-slate-700" title="Gérer les onglets">
+                                <SlidersHorizontal className="h-4 w-4" />
+                            </button>
                         )}
                     </div>
-                </div>
+
+                    {activeTab === "program" && (
+                        <ProgramTab
+                            trip={trip}
+                            canEdit={canEdit}
+                            onOpenAI={() => setIsAIItineraryOpen(true)}
+                            onOpenAddStay={handleOpenAddStay}
+                            onEditStay={handleOpenEditStay}
+                        />
+                    )}
+
+                    {activeTab === "transport" && <TransportTab trip={trip} />}
+
+                    {activeTab === "stays" && <StaysTab trip={trip} />}
+
+                    {activeTab === "photos" && <PhotosTab trip={trip} />}
+
+                {isTabSettingsOpen && canEdit && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+                        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-800">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Gérer les onglets</h3>
+                                <button onClick={() => setIsTabSettingsOpen(false)} className="text-slate-400"><X className="h-5 w-5" /></button>
+                            </div>
+                            <p className="mt-2 text-sm text-slate-500">Le programme reste toujours visible.</p>
+                            <div className="mt-4 space-y-2">
+                                {[
+                                    ["program", "Programme du voyage", true],
+                                    ["transport", "Transports", false],
+                                    ["stays", "Logements", false],
+                                    ["photos", "Photos", false],
+                                ].map(([key, label, required]) => (
+                                    <label key={key} className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                                        <input
+                                            type="checkbox"
+                                            checked={visibleTabs.includes(key)}
+                                            disabled={required}
+                                            onChange={(event) => {
+                                                const next = event.target.checked
+                                                    ? [...visibleTabs, key]
+                                                    : visibleTabs.filter((tab) => tab !== key);
+                                                setVisibleTabs(next);
+                                                if (!next.includes(activeTab)) setActiveTab("program");
+                                                axios.patch(route("trips.tabs.update", trip.id), { visible_tabs: next });
+                                            }}
+                                            className="rounded text-indigo-600"
+                                        />
+                                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                            <button onClick={() => setIsTabSettingsOpen(false)} className="mt-5 w-full rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">Fermer</button>
+                        </div>
+                    </div>
+                )}
 
                 {isEditingTrip && canEdit && (
                     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -471,42 +503,17 @@ function ShowContent({ trip }) {
                                         className="w-full text-sm rounded-xl border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-indigo-500"
                                     ></textarea>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-                                            Date de début
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={editTripForm.data.start_date}
-                                            onChange={(e) =>
-                                                editTripForm.setData(
-                                                    "start_date",
-                                                    e.target.value,
-                                                )
-                                            }
-                                            className="w-full text-sm rounded-xl border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-                                            Date de fin
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={editTripForm.data.end_date}
-                                            onChange={(e) =>
-                                                editTripForm.setData(
-                                                    "end_date",
-                                                    e.target.value,
-                                                )
-                                            }
-                                            className="w-full text-sm rounded-xl border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                                            required
-                                        />
-                                    </div>
-                                </div>
+                                <DateRangePicker
+                                    startDate={editTripForm.data.start_date}
+                                    endDate={editTripForm.data.end_date}
+                                    onChange={(start_date, end_date) =>
+                                        editTripForm.setData({
+                                            ...editTripForm.data,
+                                            start_date,
+                                            end_date,
+                                        })
+                                    }
+                                />
                                 <div className="flex justify-end items-center gap-3 mt-8 pt-4 border-t border-slate-100 dark:border-slate-700">
                                     <button
                                         type="button"
@@ -586,71 +593,19 @@ function ShowContent({ trip }) {
                                     )}
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-                                            Date d'arrivée
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={
-                                                editStayForm.data.arrival_date
-                                            }
-                                            min={trip.start_date || undefined}
-                                            max={trip.end_date || undefined}
-                                            onChange={(e) =>
-                                                editStayForm.setData(
-                                                    "arrival_date",
-                                                    e.target.value,
-                                                )
-                                            }
-                                            className="w-full text-sm rounded-xl border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                                            required
-                                        />
-                                        {editStayForm.errors.arrival_date && (
-                                            <p className="text-red-500 text-xs mt-1">
-                                                {
-                                                    editStayForm.errors
-                                                        .arrival_date
-                                                }
-                                            </p>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-                                            Date de départ
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={
-                                                editStayForm.data.departure_date
-                                            }
-                                            min={
-                                                editStayForm.data
-                                                    .arrival_date ||
-                                                trip.start_date ||
-                                                undefined
-                                            }
-                                            max={trip.end_date || undefined}
-                                            onChange={(e) =>
-                                                editStayForm.setData(
-                                                    "departure_date",
-                                                    e.target.value,
-                                                )
-                                            }
-                                            className="w-full text-sm rounded-xl border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                                            required
-                                        />
-                                        {editStayForm.errors.departure_date && (
-                                            <p className="text-red-500 text-xs mt-1">
-                                                {
-                                                    editStayForm.errors
-                                                        .departure_date
-                                                }
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
+                                <DateRangePicker
+                                    startDate={editStayForm.data.arrival_date}
+                                    endDate={editStayForm.data.departure_date}
+                                    minDate={trip.start_date || undefined}
+                                    maxDate={trip.end_date || undefined}
+                                    onChange={(arrival_date, departure_date) =>
+                                        editStayForm.setData({
+                                            ...editStayForm.data,
+                                            arrival_date,
+                                            departure_date,
+                                        })
+                                    }
+                                />
 
                                 <div className="flex justify-end items-center gap-3 mt-8 pt-4 border-t border-slate-100 dark:border-slate-700">
                                     <button
@@ -726,44 +681,16 @@ function ShowContent({ trip }) {
                                     />
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-                                            Date d'arrivée
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={arrivalDate}
-                                            min={trip.start_date || undefined}
-                                            max={trip.end_date || undefined}
-                                            onChange={(e) =>
-                                                setArrivalDate(e.target.value)
-                                            }
-                                            className="w-full text-sm rounded-xl border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-                                            Date de départ
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={departureDate}
-                                            min={
-                                                arrivalDate ||
-                                                trip.start_date ||
-                                                undefined
-                                            }
-                                            max={trip.end_date || undefined}
-                                            onChange={(e) =>
-                                                setDepartureDate(e.target.value)
-                                            }
-                                            className="w-full text-sm rounded-xl border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                                            required
-                                        />
-                                    </div>
-                                </div>
+                                <DateRangePicker
+                                    startDate={arrivalDate}
+                                    endDate={departureDate}
+                                    minDate={trip.start_date || undefined}
+                                    maxDate={trip.end_date || undefined}
+                                    onChange={(arrival, departure) => {
+                                        setArrivalDate(arrival);
+                                        setDepartureDate(departure);
+                                    }}
+                                />
 
                                 <div className="flex justify-end items-center gap-3 mt-8 pt-4 border-t border-slate-100 dark:border-slate-700">
                                     <button
@@ -1005,6 +932,7 @@ function ShowContent({ trip }) {
                         </div>
                     </div>
                 )}
+                </div>
             </GuestLayout>
         </>
     );

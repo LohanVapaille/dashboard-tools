@@ -1,6 +1,7 @@
 import { useForm } from "@inertiajs/react";
 import Modal from "@/Components/Modal";
 import LocationSearchInput from "@/Components/Itinerary/LocationSearchInput";
+import DateRangePicker from "@/Components/DateRangePicker";
 
 // Modale de création / édition d'un séjour (étape de l'itinéraire)
 export default function StayModal({ show, onClose, tripId, stay = null }) {
@@ -66,46 +67,18 @@ export default function StayModal({ show, onClose, tripId, stay = null }) {
                     )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Arrivée
-                        </label>
-                        <input
-                            type="date"
-                            value={data.arrival_date}
-                            onChange={(e) =>
-                                setData("arrival_date", e.target.value)
-                            }
-                            className="mt-1 w-full text-sm rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                            required
-                        />
-                        {errors.arrival_date && (
-                            <div className="text-red-500 text-xs mt-1">
-                                {errors.arrival_date}
-                            </div>
-                        )}
+                <DateRangePicker
+                    startDate={data.arrival_date}
+                    endDate={data.departure_date}
+                    onChange={(arrival_date, departure_date) =>
+                        setData({ ...data, arrival_date, departure_date })
+                    }
+                />
+                {(errors.arrival_date || errors.departure_date) && (
+                    <div className="text-red-500 text-xs">
+                        {errors.arrival_date || errors.departure_date}
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Départ
-                        </label>
-                        <input
-                            type="date"
-                            value={data.departure_date}
-                            onChange={(e) =>
-                                setData("departure_date", e.target.value)
-                            }
-                            className="mt-1 w-full text-sm rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                            required
-                        />
-                        {errors.departure_date && (
-                            <div className="text-red-500 text-xs mt-1">
-                                {errors.departure_date}
-                            </div>
-                        )}
-                    </div>
-                </div>
+                )}
 
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">

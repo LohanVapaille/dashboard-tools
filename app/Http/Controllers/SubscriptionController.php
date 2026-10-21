@@ -65,6 +65,11 @@ class SubscriptionController extends Controller
         $event = $request->json()->all();
         $object = $event['data']['object'] ?? [];
 
+        // Un seul endpoint Stripe peut suffire : les paiements de billets sont redirigés.
+        if (!empty($object['metadata']['flight_order_id'])) {
+            return app(FlightCheckoutController::class)->handleEvent($event, app(\App\Services\Flights\FlightOrderProcessor::class));
+        }
+
         if (in_array($event['type'] ?? '', ['checkout.session.completed', 'customer.subscription.updated'], true)) {
             $user = isset($object['client_reference_id'])
                 ? \App\Models\User::find($object['client_reference_id'])

@@ -48,7 +48,8 @@ class AIItineraryController extends Controller
             ]);
         } catch (Throwable $exception) {
             report($exception);
-            return response()->json(['message' => $exception->getMessage()], 502);
+            $status = str_contains($exception->getMessage(), 'temporairement très sollicité') ? 503 : 502;
+            return response()->json(['message' => $exception->getMessage()], $status);
         }
 
         return response()->json(['days' => $this->sanitizeSuggestions($suggestions['days'], $days)]);
