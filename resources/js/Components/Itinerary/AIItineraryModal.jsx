@@ -74,6 +74,13 @@ export default function AIItineraryModal({ trip, onClose, onStored, authenticate
                         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                             Les suggestions seront vérifiées avant d'être ajoutées.
                         </p>
+                        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+                            <strong>Attention :</strong> pensez à créer vos séjours
+                            avec les dates et les destinations correctement associées.
+                            Si votre voyage comporte plusieurs destinations, vérifiez
+                            bien les dates de chaque séjour afin que les activités
+                            soient proposées au bon endroit et au bon moment.
+                        </div>
                     </div>
                     <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
                         <X className="h-5 w-5" />
