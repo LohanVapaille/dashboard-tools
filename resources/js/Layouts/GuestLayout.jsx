@@ -1,35 +1,64 @@
 import React from "react";
 import { Link, usePage } from "@inertiajs/react";
-import { Compass, LogIn, User as UserIcon } from "lucide-react";
+import { Compass, LogIn, ShoppingCart, Ticket, User as UserIcon } from "lucide-react";
 
 export default function GuestLayout({ children }) {
-    const { auth } = usePage().props;
+    const { auth, cart } = usePage().props;
     const user = auth?.user;
+    const cartCount = cart?.count || 0;
 
     const userAvatar =
         user?.avatar || user?.profile_photo_url || user?.google_avatar;
 
     return (
         <div className="min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans antialiased">
-            <header className="bg-slate-900 border-b border-slate-800 text-white py-4 px-6 sticky top-0 z-40 shadow-sm">
-                <div className="max-w-7xl mx-auto flex justify-between items-center">
+            <header className="bg-slate-900 text-white py-4 px-6 sticky top-0 z-40 shadow-sm print:hidden">
+                <div className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-sky-400 via-indigo-500 to-fuchsia-500" />
+                <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
                     <Link
                         href={route("trips.index")}
                         className="flex items-center gap-2 font-bold text-lg tracking-tight"
                     >
-                        <div className="p-1.5 bg-indigo-600 rounded-lg">
+                        <div className="p-1.5 bg-gradient-to-br from-sky-400 via-indigo-500 to-violet-600 rounded-lg shadow-lg shadow-indigo-500/30">
                             <Compass className="w-5 h-5 text-white" />
                         </div>
-                        <span>TravelPlanner</span>
+                        <span>
+                            Travel<span className="bg-gradient-to-r from-sky-300 to-violet-300 bg-clip-text text-transparent">Planner</span>
+                        </span>
                     </Link>
 
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-3 sm:gap-6">
                         <Link
                             href={route("trips.index")}
-                            className="text-xs font-semibold text-slate-300 hover:text-white transition"
+                            className="hidden sm:inline text-xs font-semibold text-slate-300 hover:text-white transition"
                         >
                             Mes voyages
                         </Link>
+
+                        {user && (
+                            <>
+                                <Link
+                                    href={route("flights.orders.index")}
+                                    className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white transition"
+                                >
+                                    <Ticket className="w-3.5 h-3.5 text-sky-300" />
+                                    Réservations
+                                </Link>
+                                <Link
+                                    href={route("flights.cart.index")}
+                                    title="Mon panier"
+                                    className="relative flex items-center gap-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition"
+                                >
+                                    <ShoppingCart className="w-4 h-4" />
+                                    <span className="hidden md:inline">Panier</span>
+                                    {cartCount > 0 && (
+                                        <span className="absolute -top-2 -right-2 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-gradient-to-r from-fuchsia-500 to-rose-500 px-1 text-[10px] font-black text-white shadow ring-2 ring-slate-900">
+                                            {cartCount}
+                                        </span>
+                                    )}
+                                </Link>
+                            </>
+                        )}
 
                         {/* Affichage de l'état de connexion / Session */}
                         <div className="flex items-center gap-3 pl-4 border-l border-slate-800 text-xs">
@@ -56,7 +85,7 @@ export default function GuestLayout({ children }) {
                                             )}
                                         </div>
                                     )}
-                                    <span className="text-slate-300 group-hover:text-white transition font-medium">
+                                    <span className="hidden sm:inline text-slate-300 group-hover:text-white transition font-medium">
                                         {user.name || user.email}
                                     </span>
                                 </Link>

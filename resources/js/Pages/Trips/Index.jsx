@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import GuestLayout from "@/Layouts/GuestLayout";
 import Modal from "@/Components/Modal";
+import DateRangePicker from "@/Components/DateRangePicker";
 import { Head, Link, useForm, router } from "@inertiajs/react";
 import {
     Plus,
@@ -36,12 +37,21 @@ function TripCard({ trip, variant, onDestroy, onLeave }) {
         variant === "owned"
             ? "border-blue-200 hover:border-blue-300"
             : "border-purple-200 hover:border-purple-300";
+    // Une teinte par voyage pour distinguer les cartes d'un coup d'œil.
+    const accents = [
+        "from-sky-400 to-indigo-500",
+        "from-violet-400 to-fuchsia-500",
+        "from-emerald-400 to-teal-500",
+        "from-amber-400 to-rose-500",
+        "from-rose-400 to-pink-500",
+    ];
 
     return (
         <Link
             href={route("trips.show", trip.id)}
-            className={`group relative block bg-white border-2 ${borderClass} rounded-2xl p-6 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all`}
+            className={`group relative block overflow-hidden bg-white border-2 ${borderClass} rounded-2xl p-6 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all`}
         >
+            <span className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${accents[trip.id % accents.length]}`} />
             {variant === "owned" ? (
                 <button
                     onClick={(e) => {
@@ -146,7 +156,7 @@ export default function Index({ ownedTrips = [], joinedTrips = [] }) {
         <GuestLayout>
             <Head title="Mes Voyages" />
 
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600">
+            <div className="bg-gradient-to-r from-sky-500 via-indigo-600 to-violet-600">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex flex-wrap items-center justify-between gap-4">
                     <div className="text-white">
                         <div className="inline-flex items-center gap-2 text-blue-100 text-sm font-medium mb-1">
@@ -268,46 +278,19 @@ export default function Index({ ownedTrips = [], joinedTrips = [] }) {
                             rows="3"
                         />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">
-                                Date de début
-                            </label>
-                            <input
-                                type="date"
-                                value={data.start_date}
-                                onChange={(e) =>
-                                    setData("start_date", e.target.value)
-                                }
-                                className="mt-1 w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                                required
-                            />
-                            {errors.start_date && (
-                                <div className="text-red-500 text-xs mt-1">
-                                    {errors.start_date}
-                                </div>
-                            )}
+                    <DateRangePicker
+                        startDate={data.start_date}
+                        endDate={data.end_date}
+                        onChange={(start_date, end_date) => {
+                            setData("start_date", start_date);
+                            setData("end_date", end_date);
+                        }}
+                    />
+                    {(errors.start_date || errors.end_date) && (
+                        <div className="text-xs text-red-500">
+                            {errors.start_date || errors.end_date}
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">
-                                Date de fin
-                            </label>
-                            <input
-                                type="date"
-                                value={data.end_date}
-                                onChange={(e) =>
-                                    setData("end_date", e.target.value)
-                                }
-                                className="mt-1 w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                                required
-                            />
-                            {errors.end_date && (
-                                <div className="text-red-500 text-xs mt-1">
-                                    {errors.end_date}
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    )}
 
                     {errors.guest_limit && (
                         <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-xs font-medium rounded-xl p-3 flex items-start gap-2">
