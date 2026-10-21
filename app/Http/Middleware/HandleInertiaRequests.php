@@ -37,6 +37,11 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'status' => fn () => $request->session()->get('status'),
             ],
+            'cart' => fn () => [
+                'count' => $request->user()
+                    ? \App\Models\FlightCartItem::active()->where('user_id', $request->user()->id)->count()
+                    : 0,
+            ],
         ];
     }
 }

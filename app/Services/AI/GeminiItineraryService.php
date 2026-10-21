@@ -16,34 +16,54 @@ class GeminiItineraryService
         }
 
         $prompt = $this->buildPrompt($context);
-        $response = Http::timeout(45)
-            ->retry(2, 500)
-            ->post('https://generativelanguage.googleapis.com/v1beta/models/' .
-                config('services.gemini.model', 'gemini-flash-latest') . ':generateContent?key=' . urlencode($apiKey), [
-                    'contents' => [[
-                        'parts' => [['text' => $prompt]],
-                    ]],
-                    'generationConfig' => [
-                        'temperature' => 0.4,
-                        'responseMimeType' => 'application/json',
-                    ],
-                ]);
+        $models = array_values(array_unique(array_merge(
+            [config('services.gemini.model', 'gemini-flash-latest')],
+            config('services.gemini.fallback_models', []),
+        )));
+        $lastStatus = null;
 
-        if ($response->failed()) {
-            throw new RuntimeException('Gemini a refusé la requête (' . $response->status() . ').');
+        foreach ($models as $model) {
+            $response = Http::timeout(45)
+                ->retry(2, 750, function ($exception, $request) {
+                    return $exception instanceof \Illuminate\Http\Client\RequestException
+                        || $exception instanceof \Illuminate\Http\Client\ConnectionException;
+                })
+                ->post('https://generativelanguage.googleapis.com/v1beta/models/' .
+                    urlencode($model) . ':generateContent?key=' . urlencode($apiKey), [
+                        'contents' => [[
+                            'parts' => [['text' => $prompt]],
+                        ]],
+                        'generationConfig' => [
+                            'temperature' => 0.4,
+                            'responseMimeType' => 'application/json',
+                        ],
+                    ]);
+
+            if ($response->successful()) {
+                $text = $response->json('candidates.0.content.parts.0.text');
+                if (!is_string($text) || trim($text) === '') {
+                    throw new RuntimeException('Gemini n’a pas renvoyé de contenu exploitable.');
+                }
+
+                $data = json_decode($text, true);
+                if (!is_array($data) || !isset($data['days']) || !is_array($data['days'])) {
+                    throw new RuntimeException('La réponse de Gemini n’est pas un programme JSON valide.');
+                }
+
+                return $data;
+            }
+
+            $lastStatus = $response->status();
+            if (!in_array($lastStatus, [429, 500, 502, 503, 504], true)) {
+                break;
+            }
         }
 
-        $text = $response->json('candidates.0.content.parts.0.text');
-        if (!is_string($text) || trim($text) === '') {
-            throw new RuntimeException('Gemini n’a pas renvoyé de contenu exploitable.');
+        if ($lastStatus === 503) {
+            throw new RuntimeException('Le service Gemini est temporairement très sollicité. Réessayez dans quelques instants.');
         }
 
-        $data = json_decode($text, true);
-        if (!is_array($data) || !isset($data['days']) || !is_array($data['days'])) {
-            throw new RuntimeException('La réponse de Gemini n’est pas un itinéraire JSON valide.');
-        }
-
-        return $data;
+        throw new RuntimeException('Gemini a refusé la requête (' . ($lastStatus ?? 'inconnu') . ').');
     }
 
     private function buildPrompt(array $context): string

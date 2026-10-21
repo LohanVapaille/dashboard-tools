@@ -26,12 +26,21 @@ export default function AIItineraryModal({ trip, onClose, onStored, authenticate
             );
             setSuggestions(response.data.days || []);
         } catch (requestError) {
+            const status = requestError.response?.status;
+            const serverMessage = requestError.response?.data?.message || "";
+            const readableError = status === 503
+                ? "Le service IA est momentanément très sollicité. Réessayez dans quelques instants."
+                : status === 429
+                    ? "La limite de génération a été atteinte. Réessayez plus tard ou choisissez l'offre Premium."
+                    : status >= 500
+                        ? "Le service IA rencontre un problème temporaire. Réessayez dans quelques instants."
+                        : serverMessage && !serverMessage.toLowerCase().includes("http request")
+                            ? serverMessage
+                            : "Impossible de générer le programme pour le moment. Vérifiez votre connexion puis réessayez.";
             setError(
-                (requestError.response?.status === 429
+                status === 429 && !requestError.response?.data?.message
                     ? "Vous avez atteint vos 3 générations gratuites du jour. Revenez demain ou choisissez l'offre Premium."
-                    : null) ||
-                    requestError.response?.data?.message ||
-                    "La génération de l'itinéraire a échoué.",
+                    : readableError,
             );
         } finally {
             setLoading(false);
@@ -65,11 +74,11 @@ export default function AIItineraryModal({ trip, onClose, onStored, authenticate
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
             <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl bg-white shadow-xl dark:bg-slate-800">
-                <div className="flex items-center justify-between border-b border-slate-200 p-5 dark:border-slate-700">
+                <div className="relative flex items-center justify-between border-b border-slate-200 p-5 pr-16 dark:border-slate-700">
                     <div>
                         <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
                             <Sparkles className="h-5 w-5 text-indigo-500" />
-                            Suggérer un itinéraire avec l'IA
+                            Suggérer un programme avec l&apos;IA
                         </h2>
                         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                             Les suggestions seront vérifiées avant d'être ajoutées.
@@ -82,8 +91,13 @@ export default function AIItineraryModal({ trip, onClose, onStored, authenticate
                             soient proposées au bon endroit et au bon moment.
                         </div>
                     </div>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
-                        <X className="h-5 w-5" />
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="Fermer la fenêtre"
+                        className="absolute right-5 top-5 rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                    >
+                        <X className="h-6 w-6" />
                     </button>
                 </div>
 
@@ -126,7 +140,7 @@ export default function AIItineraryModal({ trip, onClose, onStored, authenticate
                             className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
                         >
                             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                            {loading ? "Génération..." : "Générer des suggestions"}
+                            {loading ? "Génération..." : "Suggérer un programme avec l'IA"}
                         </button>
                     </form>
 
