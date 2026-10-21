@@ -26,6 +26,8 @@ export default function PeriodSlot({
     const [category, setCategory] = useState("autre");
     const [price, setPrice] = useState("");
     const [description, setDescription] = useState("");
+    const [locationName, setLocationName] = useState("");
+    const [sourceUrl, setSourceUrl] = useState("");
 
     const filteredActivities = activities.filter((a) => a.period === periodKey);
 
@@ -38,6 +40,8 @@ export default function PeriodSlot({
                 category,
                 price: price || 0,
                 description,
+                location_name: locationName,
+                source_url: sourceUrl || null,
             })
             .then((response) => {
                 if (onActivityAdded) onActivityAdded(response.data);
@@ -45,6 +49,8 @@ export default function PeriodSlot({
                 setTitle("");
                 setPrice("");
                 setDescription("");
+                setLocationName("");
+                setSourceUrl("");
             })
             .catch((error) => {
                 console.error("Erreur lors de l'ajout :", error);
@@ -111,61 +117,80 @@ export default function PeriodSlot({
                             </Draggable>
                         ))}
                         {provided.placeholder}
+                        {isAdding && (
+                            <form
+                                onSubmit={handleAdd}
+                                className="p-3 bg-white dark:bg-slate-800 rounded-lg border border-indigo-200 space-y-2 mt-2"
+                            >
+                                <input
+                                    type="text"
+                                    placeholder="Titre de l'activité..."
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    className="w-full text-xs rounded border-slate-300 dark:bg-slate-900 dark:text-white"
+                                    required
+                                />
+                                <div className="grid grid-cols-2 gap-2">
+                                    <select
+                                        value={category}
+                                        onChange={(e) => setCategory(e.target.value)}
+                                        className="text-xs rounded border-slate-300 dark:bg-slate-900 dark:text-white"
+                                    >
+                                        <option value="visite">Visite / Activité</option>
+                                        <option value="repas">Restaurant / Repas</option>
+                                        <option value="hebergement">Hébergement</option>
+                                        <option value="transport">Transport</option>
+                                        <option value="autre">Autre</option>
+                                    </select>
+                                    <input
+                                        type="number"
+                                        placeholder="Prix (€)"
+                                        value={price}
+                                        onChange={(e) => setPrice(e.target.value)}
+                                        className="text-xs rounded border-slate-300 dark:bg-slate-900 dark:text-white"
+                                    />
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Lieu / adresse"
+                                    value={locationName}
+                                    onChange={(e) => setLocationName(e.target.value)}
+                                    className="w-full text-xs rounded border-slate-300 dark:bg-slate-900 dark:text-white"
+                                />
+                                <textarea
+                                    placeholder="Description et informations utiles..."
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    rows="2"
+                                    className="w-full text-xs rounded border-slate-300 dark:bg-slate-900 dark:text-white"
+                                />
+                                <input
+                                    type="url"
+                                    placeholder="Lien du site ou de réservation (facultatif)"
+                                    value={sourceUrl}
+                                    onChange={(e) => setSourceUrl(e.target.value)}
+                                    className="w-full text-xs rounded border-slate-300 dark:bg-slate-900 dark:text-white"
+                                />
+                                <div className="flex justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsAdding(false)}
+                                        className="text-xs text-slate-500 px-2 py-1"
+                                    >
+                                        Annuler
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="text-xs bg-indigo-600 text-white px-3 py-1 rounded font-medium"
+                                    >
+                                        Ajouter
+                                    </button>
+                                </div>
+                            </form>
+                        )}
                     </div>
                 )}
             </Droppable>
-
-            {/* Formulaire d'ajout */}
-            {isAdding && (
-                <form
-                    onSubmit={handleAdd}
-                    className="p-3 bg-white dark:bg-slate-800 rounded-lg border border-indigo-200 space-y-2 mt-2"
-                >
-                    <input
-                        type="text"
-                        placeholder="Titre de l'activité..."
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        className="w-full text-xs rounded border-slate-300 dark:bg-slate-900 dark:text-white"
-                        required
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                        <select
-                            value={category}
-                            onChange={(e) => setCategory(e.target.value)}
-                            className="text-xs rounded border-slate-300 dark:bg-slate-900 dark:text-white"
-                        >
-                            <option value="visite">Visite / Activité</option>
-                            <option value="manger">Restaurant / Repas</option>
-                            <option value="hotel">Hébergement</option>
-                            <option value="transport">Transport</option>
-                            <option value="autre">Autre</option>
-                        </select>
-                        <input
-                            type="number"
-                            placeholder="Prix (€)"
-                            value={price}
-                            onChange={(e) => setPrice(e.target.value)}
-                            className="text-xs rounded border-slate-300 dark:bg-slate-900 dark:text-white"
-                        />
-                    </div>
-                    <div className="flex justify-end gap-2">
-                        <button
-                            type="button"
-                            onClick={() => setIsAdding(false)}
-                            className="text-xs text-slate-500 px-2 py-1"
-                        >
-                            Annuler
-                        </button>
-                        <button
-                            type="submit"
-                            className="text-xs bg-indigo-600 text-white px-3 py-1 rounded font-medium"
-                        >
-                            Ajouter
-                        </button>
-                    </div>
-                </form>
-            )}
         </div>
     );
 }

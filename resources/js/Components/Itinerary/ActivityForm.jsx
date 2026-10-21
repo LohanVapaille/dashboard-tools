@@ -8,22 +8,32 @@ export default function ActivityForm({
     period,
     activity = null,
     onClose,
+    onUpdated,
 }) {
-    const { data, setData, post, put, processing, errors } = useForm({
+    const { data, setData, post, patch, processing, errors } = useForm({
         period,
         category: activity?.category || "autre",
         title: activity?.title || "",
         description: activity?.description || "",
         price: activity?.price ?? "",
         location_name: activity?.location_name || "",
+        source_url: activity?.source_url || "",
         start_time: activity?.start_time?.slice(0, 5) || "",
     });
 
     const submit = (e) => {
         e.preventDefault();
         if (activity) {
-            put(route("activities.update", activity.id), {
-                onSuccess: onClose,
+            patch(route("activities.update", activity.id), {
+                onSuccess: () => {
+                    onUpdated?.({
+                        ...activity,
+                        ...data,
+                        price: data.price === "" ? null : data.price,
+                        source_url: data.source_url || null,
+                    });
+                    onClose?.();
+                },
                 preserveScroll: true,
             });
         } else {
@@ -68,6 +78,13 @@ export default function ActivityForm({
             {errors.title && (
                 <div className="text-red-500 text-xs">{errors.title}</div>
             )}
+            {Object.entries(errors)
+                .filter(([field]) => field !== "title")
+                .map(([field, message]) => (
+                    <div key={field} className="text-red-500 text-xs">
+                        {message}
+                    </div>
+                ))}
 
             <div className="grid grid-cols-3 gap-2">
                 <input
@@ -93,6 +110,14 @@ export default function ActivityForm({
                     className="text-sm rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                 />
             </div>
+
+            <input
+                type="url"
+                placeholder="Lien du site ou de la réservation (facultatif)"
+                value={data.source_url}
+                onChange={(e) => setData("source_url", e.target.value)}
+                className="w-full text-sm rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+            />
 
             <textarea
                 placeholder="Informations complémentaires (adresse, réservation, contact...)"

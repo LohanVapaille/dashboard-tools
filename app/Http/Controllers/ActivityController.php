@@ -20,6 +20,7 @@ class ActivityController extends Controller
             'description' => 'nullable|string',
             'location_name' => 'nullable|string',
             'source_url' => 'nullable|url:http,https|max:2048',
+            'start_time' => 'nullable|date_format:H:i',
         ]);
 
         // Crée et récupère l'activité fraîchement insérée
@@ -39,6 +40,7 @@ class ActivityController extends Controller
             'description' => 'nullable|string',
             'location_name' => 'nullable|string',
             'source_url' => 'nullable|url:http,https|max:2048',
+            'start_time' => 'nullable|date_format:H:i',
         ]);
 
         $activity->update($validated);
