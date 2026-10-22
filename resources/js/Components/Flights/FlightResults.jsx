@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { ArrowUpDown, CircleAlert, Clock3, ExternalLink, Plane, SlidersHorizontal } from "lucide-react";
+import { ArrowUpDown, Briefcase, CircleAlert, Clock3, ExternalLink, Luggage, Plane, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import FlightOfferCard from "@/Components/Flights/FlightOfferCard";
+import { formatPrice } from "@/Utils/flights";
 
 const timeSlots = {
     all: "Toute la journée",
@@ -47,11 +48,19 @@ export default function FlightResults({ result, onSelect, actionLabel }) {
     const [slot, setSlot] = useState("all");
     const [sort, setSort] = useState("best");
     const [visible, setVisible] = useState(10);
+    const [toggles, setToggles] = useState({ checked: false, carryOn: false, refundable: false });
 
     const offers = result?.offers || [];
     const bookable = offers.filter((offer) => offer.bookable);
     const partners = offers.filter((offer) => !offer.bookable);
     const airlines = useMemo(() => [...new Set(bookable.map((offer) => offer.airline?.name))].sort(), [bookable]);
+    const priceBounds = useMemo(() => {
+        const prices = bookable.map((offer) => offer.total_amount);
+        return prices.length ? [Math.floor(Math.min(...prices)), Math.ceil(Math.max(...prices))] : [0, 0];
+    }, [bookable]);
+    const [maxPrice, setMaxPrice] = useState(null);
+    const priceLimit = maxPrice ?? priceBounds[1];
+    const currency = bookable[0]?.currency || "EUR";
 
     const cheapest = Math.min(...bookable.map((offer) => offer.total_amount));
     const fastest = Math.min(...bookable.map((offer) => offer.duration_minutes ?? Infinity));
@@ -62,6 +71,10 @@ export default function FlightResults({ result, onSelect, actionLabel }) {
         .filter((offer) => airline === "all" || offer.airline?.name === airline)
         .filter((offer) => stops === "all" || offer.stops <= Number(stops))
         .filter((offer) => inSlot(offer, slot))
+        .filter((offer) => !toggles.checked || offer.baggage?.checked > 0)
+        .filter((offer) => !toggles.carryOn || offer.baggage?.carry_on > 0)
+        .filter((offer) => !toggles.refundable || offer.conditions?.refundable === true)
+        .filter((offer) => offer.total_amount <= priceLimit)
         .sort((a, b) => {
             if (sort === "price") return a.total_amount - b.total_amount;
             if (sort === "duration") return (a.duration_minutes ?? 1e9) - (b.duration_minutes ?? 1e9);
@@ -117,6 +130,43 @@ export default function FlightResults({ result, onSelect, actionLabel }) {
                         <option value="departure">Heure de départ</option>
                     </Select>
                 </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+                {[
+                    ["checked", Luggage, "Bagage soute inclus"],
+                    ["carryOn", Briefcase, "Bagage cabine inclus"],
+                    ["refundable", ShieldCheck, "Remboursable"],
+                ].map(([key, Icon, label]) => (
+                    <button
+                        key={key}
+                        type="button"
+                        onClick={() => {
+                            setToggles((current) => ({ ...current, [key]: !current[key] }));
+                            setVisible(10);
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition ${toggles[key] ? "bg-indigo-600 text-white ring-indigo-600" : "bg-white text-slate-600 ring-slate-200 hover:bg-indigo-50 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700"}`}
+                    >
+                        <Icon className="h-3.5 w-3.5" /> {label}
+                    </button>
+                ))}
+                {priceBounds[1] > priceBounds[0] && (
+                    <label className="ml-auto flex min-w-[14rem] items-center gap-3 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                        Prix max
+                        <input
+                            type="range"
+                            min={priceBounds[0]}
+                            max={priceBounds[1]}
+                            value={priceLimit}
+                            onChange={(event) => {
+                                setMaxPrice(Number(event.target.value));
+                                setVisible(10);
+                            }}
+                            className="flex-1 accent-indigo-600"
+                        />
+                        <span className="w-20 text-right tabular-nums text-indigo-600 dark:text-indigo-400">{formatPrice(priceLimit, currency)}</span>
+                    </label>
+                )}
             </div>
 
             {filtered.slice(0, visible).map((offer) => (

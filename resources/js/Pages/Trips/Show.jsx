@@ -13,32 +13,54 @@ import {
 import { formatDate } from "@/Utils/formatters";
 import {
     ArrowLeft,
-    Plus,
+    BedDouble,
+    Bus,
+    Calendar,
+    ChevronRight,
+    Edit3,
+    Flag,
+    Home,
+    Hourglass,
+    Image,
     MapPin,
     Settings,
-    Calendar,
-    X,
-    Edit3,
-    Share2,
-    Copy,
-    Check,
-    Trash2,
-    Bus,
-    BedDouble,
-    Image,
     SlidersHorizontal,
+    Sparkles,
+    UserPlus,
+    Users,
+    Wallet,
+    X,
 } from "lucide-react";
-import axios from "axios";
 import AIItineraryModal from "@/Components/Itinerary/AIItineraryModal";
 import ProgramTab from "@/Components/Itinerary/ProgramTab";
 import TransportTab from "@/Components/Itinerary/TransportTab";
 import StaysTab from "@/Components/Itinerary/StaysTab";
 import PhotosTab from "@/Components/Itinerary/PhotosTab";
+import BudgetTab from "@/Components/Budget/BudgetTab";
 import DateRangePicker from "@/Components/DateRangePicker";
+import ShareTripModal from "@/Components/Trips/ShareTripModal";
+import TripSettingsModal from "@/Components/Trips/TripSettingsModal";
+
+const dayNumber = (date) => {
+    const [year, month, day] = date.split("-").map(Number);
+    return Math.round(Date.UTC(year, month - 1, day) / 86400000);
+};
+
+function tripStatus(start, end) {
+    if (!start || !end) return null;
+    const now = new Date();
+    const today = Math.round(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86400000);
+    const [from, to] = [dayNumber(start), dayNumber(end)];
+    if (today < from) {
+        const left = from - today;
+        return { Icon: Hourglass, label: left === 1 ? "Départ demain" : `Départ dans ${left} jours`, className: "bg-amber-300 text-amber-950" };
+    }
+    if (today <= to) return { Icon: Sparkles, label: `En cours · jour ${today - from + 1}/${to - from + 1}`, className: "bg-emerald-300 text-emerald-950" };
+    return { Icon: Flag, label: "Voyage terminé", className: "bg-white/15 backdrop-blur" };
+}
 
 function ShowContent({ trip }) {
-    const { canEdit, canViewShareLink, canManageAccess, canManageRoles } =
-        useTripPermissions();
+    const { canEdit, canViewShareLink } = useTripPermissions();
 
     const { props } = usePage();
     const authenticated = Boolean(props.auth?.user);
@@ -48,12 +70,13 @@ function ShowContent({ trip }) {
 
     const [isAddingStay, setIsAddingStay] = useState(false);
     const [isAIItineraryOpen, setIsAIItineraryOpen] = useState(false);
-    const defaultTabs = ["program", "transport", "stays", "photos"];
+    const defaultTabs = ["program", "transport", "stays", "budget", "photos"];
     const [visibleTabs, setVisibleTabs] = useState(
         trip.visible_tabs?.length ? trip.visible_tabs : defaultTabs,
     );
     const [activeTab, setActiveTab] = useState("program");
-    const [isTabSettingsOpen, setIsTabSettingsOpen] = useState(false);
+    const [settingsSection, setSettingsSection] = useState(null);
+    const [isShareOpen, setIsShareOpen] = useState(false);
     const [arrivalDate, setArrivalDate] = useState("");
     const [departureDate, setDepartureDate] = useState("");
     const [locationData, setLocationData] = useState({
@@ -61,15 +84,6 @@ function ShowContent({ trip }) {
         latitude: null,
         longitude: null,
     });
-    const [isEditingTrip, setIsEditingTrip] = useState(false);
-
-    const editTripForm = useForm({
-        title: trip.title || "",
-        description: trip.description || "",
-        start_date: trip.start_date || "",
-        end_date: trip.end_date || "",
-    });
-
     const [editingStay, setEditingStay] = useState(null);
     const editStayForm = useForm({
         location_name: "",
@@ -79,113 +93,11 @@ function ShowContent({ trip }) {
         departure_date: "",
     });
 
-    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-    const [members, setMembers] = useState([]);
-    const [shareUrl, setShareUrl] = useState("");
-    const [copied, setCopied] = useState(false);
-
-    const openShareModal = async () => {
-        setIsShareModalOpen(true);
-        try {
-            if (canManageAccess) {
-                const response = await axios.get(
-                    route("trips.members", trip.id),
-                );
-                setMembers(response.data.members);
-                setShareUrl(response.data.share_url);
-            } else {
-                const response = await axios.get(
-                    route("trips.share-link", trip.id),
-                );
-                setShareUrl(response.data.share_url);
-                setMembers([]);
-            }
-        } catch (error) {
-            console.error("Erreur lors du chargement du partage", error);
-        }
-    };
-
-    const copyToClipboard = () => {
-        navigator.clipboard.writeText(shareUrl);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    };
-
-    const updateRole = async (memberId, newRole) => {
-        try {
-            await axios.patch(
-                route("trips.members.update", [trip.id, memberId]),
-                { role: newRole },
-            );
-            setMembers(
-                members.map((m) =>
-                    m.id === memberId ? { ...m, role: newRole } : m,
-                ),
-            );
-        } catch (error) {
-            console.error(
-                "Erreur modification rôle",
-                error.response?.data || error,
-            );
-        }
-    };
-
-    const removeMember = async (memberId) => {
-        try {
-            await axios.delete(
-                route("trips.members.remove", [trip.id, memberId]),
-            );
-            setMembers(members.filter((m) => m.id !== memberId));
-        } catch (error) {
-            console.error("Erreur suppression membre", error);
-        }
-    };
-
-    const [inviteEmail, setInviteEmail] = useState("");
-    const [inviteRole, setInviteRole] = useState("viewer");
-    const [inviteProcessing, setInviteProcessing] = useState(false);
-    const [inviteError, setInviteError] = useState("");
-
-    const inviteMember = async (e) => {
-        e.preventDefault();
-        setInviteProcessing(true);
-        setInviteError("");
-        try {
-            await axios.post(route("trips.members.store", trip.id), {
-                email: inviteEmail,
-                role: inviteRole,
-            });
-            setInviteEmail("");
-            setInviteRole("viewer");
-            const response = await axios.get(route("trips.members", trip.id));
-            setMembers(response.data.members);
-        } catch (error) {
-            setInviteError(
-                error.response?.data?.message ||
-                    "Impossible d'inviter cette personne.",
-            );
-        } finally {
-            setInviteProcessing(false);
-        }
-    };
-
-    const handleOpenEditTrip = () => {
-        if (!canEdit) return;
-        editTripForm.setData({
-            title: trip.title || "",
-            description: trip.description || "",
-            start_date: trip.start_date || "",
-            end_date: trip.end_date || "",
-        });
-        setIsEditingTrip(true);
-    };
-
-    const handleUpdateTrip = (e) => {
-        e.preventDefault();
-        editTripForm.put(route("trips.update", trip.id), {
-            onSuccess: () => setIsEditingTrip(false),
-        });
-    };
+    const itinerary = [
+        ...(trip.origin_name ? [{ label: trip.origin_name.split(",")[0], origin: true }] : []),
+        ...(trip.stays || []).map((stay) => ({ label: stay.location_name.split(",")[0] })),
+    ];
+    const status = tripStatus(trip.start_date, trip.end_date);
 
     const handleOpenAddStay = () => {
         if (!canEdit) return;
@@ -281,80 +193,68 @@ function ShowContent({ trip }) {
                 <Head title={trip.title} />
 
                 <div className="py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-                    <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 overflow-hidden bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <div className="pointer-events-none absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-sky-400 via-indigo-500 to-fuchsia-500" />
-                        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-indigo-200/40 to-fuchsia-200/30 blur-2xl dark:from-indigo-500/10 dark:to-fuchsia-500/10" />
-                        <div className="absolute top-4 right-4 flex items-center gap-3">
-                            {trip.avatars?.length > 0 && (
-                                <AvatarStack people={trip.avatars} />
-                            )}
+                    <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-6 text-white shadow-xl shadow-indigo-500/20 sm:p-8">
+                        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-white/15 blur-3xl" />
+                        <div className="pointer-events-none absolute -bottom-24 left-1/4 h-64 w-64 rounded-full bg-sky-300/20 blur-3xl" />
 
-                            <div className="flex items-center gap-1">
+                        <div className="relative flex flex-wrap items-center justify-between gap-3">
+                            <Link href={route("trips.index")} className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold backdrop-blur transition hover:bg-white/25">
+                                <ArrowLeft className="h-3.5 w-3.5" /> Mes voyages
+                            </Link>
+                            <div className="flex items-center gap-2">
+                                {trip.avatars?.length > 0 && (
+                                    <button type="button" onClick={() => canViewShareLink && setIsShareOpen(true)} className="mr-1 rounded-full" title="Participants">
+                                        <AvatarStack people={trip.avatars} />
+                                    </button>
+                                )}
                                 {canViewShareLink && (
-                                    <button
-                                        onClick={openShareModal}
-                                        title="Partager le voyage"
-                                        className="p-1.5 text-slate-300 hover:text-indigo-600 dark:text-slate-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-lg transition"
-                                    >
-                                        <Share2 className="w-4 h-4" />
+                                    <button onClick={() => setIsShareOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-lg transition hover:bg-indigo-50">
+                                        <UserPlus className="h-4 w-4" /> Partager
                                     </button>
                                 )}
                                 {canEdit && (
-                                    <button
-                                        onClick={handleOpenEditTrip}
-                                        title="Modifier le voyage"
-                                        className="p-1.5 text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-lg transition"
-                                    >
-                                        <Settings className="w-4 h-4" />
+                                    <button onClick={() => setSettingsSection("general")} title="Réglages du voyage" className="rounded-xl bg-white/15 p-2.5 backdrop-blur transition hover:bg-white/25">
+                                        <Settings className="h-5 w-5" />
                                     </button>
                                 )}
                             </div>
                         </div>
 
-                        <div>
-                            <Link
-                                href={route("trips.index")}
-                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition mb-3"
-                            >
-                                <ArrowLeft className="w-4 h-4" />
-                                Retour à la liste
-                            </Link>
+                        <div className="relative mt-6">
+                            <h1 className="text-3xl font-black tracking-tight sm:text-4xl">{trip.title}</h1>
+                            {trip.description && <p className="mt-2 max-w-2xl text-sm text-indigo-100">{trip.description}</p>}
 
-                            <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white pr-16">
-                                {trip.title}
-                            </h1>
-
-                            {trip.description && (
-                                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                                    {trip.description}
-                                </p>
-                            )}
-
-                            {(trip.start_date || trip.end_date) && (
-                                <div className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 px-3 py-1.5 rounded-lg">
-                                    <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                                    <span>
-                                        Du {formatDate(trip.start_date)} au{" "}
-                                        {formatDate(trip.end_date)}
+                            <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
+                                {trip.start_date && (
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 backdrop-blur">
+                                        <Calendar className="h-3.5 w-3.5" /> {formatDate(trip.start_date)} → {formatDate(trip.end_date)}
                                     </span>
-                                </div>
+                                )}
+                                {status && (
+                                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 ${status.className}`}>
+                                        <status.Icon className="h-3.5 w-3.5" /> {status.label}
+                                    </span>
+                                )}
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 backdrop-blur">
+                                    <Users className="h-3.5 w-3.5" /> {trip.travelers || 1} voyageur{(trip.travelers || 1) > 1 ? "s" : ""}
+                                </span>
+                            </div>
+
+                            {itinerary.length > 1 && (
+                                <ol className="mt-5 flex flex-wrap items-center gap-1.5">
+                                    {itinerary.map((point, index) => (
+                                        <li key={`${point.label}-${index}`} className="flex items-center gap-1.5">
+                                            {index > 0 && <ChevronRight className="h-4 w-4 text-white/50" />}
+                                            <span className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-bold ${point.origin ? "bg-slate-900/25 text-indigo-50" : "bg-white text-slate-800 shadow"}`}>
+                                                {point.origin ? <Home className="h-3.5 w-3.5" /> : <MapPin className="h-3.5 w-3.5 text-fuchsia-500" />}
+                                                {point.label}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ol>
                             )}
                         </div>
-
-                        <button
-                            onClick={handleOpenAddStay}
-                            disabled={!canEdit}
-                            title={canEdit ? undefined : "Lecture seule"}
-                            className={`text-sm font-bold px-5 py-3 rounded-xl shadow-md flex items-center gap-2 transition shrink-0 ${
-                                canEdit
-                                    ? "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-indigo-500/30 text-white cursor-pointer"
-                                    : "bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed"
-                            }`}
-                        >
-                            <Plus className="w-5 h-5" />
-                            Ajouter un séjour
-                        </button>
-                    </div>
+                    </section>
 
                     <TripNotes trip={trip} />
 
@@ -364,9 +264,10 @@ function ShowContent({ trip }) {
 
                     <div className="flex flex-wrap items-end gap-1 border-b border-slate-200 dark:border-slate-700">
                         {[
-                            ["program", "Programme", Calendar, "text-indigo-600 dark:text-indigo-400", "bg-indigo-500"],
+                            ["program", "Programme", Calendar, "text-violet-600 dark:text-violet-400", "bg-violet-500"],
                             ["transport", "Transports", Bus, "text-sky-600 dark:text-sky-400", "bg-sky-500"],
                             ["stays", "Logements", BedDouble, "text-emerald-600 dark:text-emerald-400", "bg-emerald-500"],
+                            ["budget", "Budget", Wallet, "text-orange-600 dark:text-orange-400", "bg-orange-500"],
                             ["photos", "Photos", Image, "text-rose-600 dark:text-rose-400", "bg-rose-500"],
                         ].filter(([key]) => visibleTabs.includes(key)).map(([key, label, Icon, activeText, bar]) => (
                             <button
@@ -379,7 +280,7 @@ function ShowContent({ trip }) {
                             </button>
                         ))}
                         {canEdit && (
-                            <button onClick={() => setIsTabSettingsOpen(true)} className="ml-auto mb-2 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-slate-700" title="Gérer les onglets">
+                            <button onClick={() => setSettingsSection("tabs")} className="ml-auto mb-2 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-slate-700" title="Gérer les onglets">
                                 <SlidersHorizontal className="h-4 w-4" />
                             </button>
                         )}
@@ -399,141 +300,24 @@ function ShowContent({ trip }) {
 
                     {activeTab === "stays" && <StaysTab trip={trip} />}
 
+                    {activeTab === "budget" && <BudgetTab trip={trip} canEdit={canEdit} />}
+
                     {activeTab === "photos" && <PhotosTab trip={trip} />}
 
-                {isTabSettingsOpen && canEdit && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
-                        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-800">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Gérer les onglets</h3>
-                                <button onClick={() => setIsTabSettingsOpen(false)} className="text-slate-400"><X className="h-5 w-5" /></button>
-                            </div>
-                            <p className="mt-2 text-sm text-slate-500">Le programme reste toujours visible.</p>
-                            <div className="mt-4 space-y-2">
-                                {[
-                                    ["program", "Programme du voyage", true],
-                                    ["transport", "Transports", false],
-                                    ["stays", "Logements", false],
-                                    ["photos", "Photos", false],
-                                ].map(([key, label, required]) => (
-                                    <label key={key} className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
-                                        <input
-                                            type="checkbox"
-                                            checked={visibleTabs.includes(key)}
-                                            disabled={required}
-                                            onChange={(event) => {
-                                                const next = event.target.checked
-                                                    ? [...visibleTabs, key]
-                                                    : visibleTabs.filter((tab) => tab !== key);
-                                                setVisibleTabs(next);
-                                                if (!next.includes(activeTab)) setActiveTab("program");
-                                                axios.patch(route("trips.tabs.update", trip.id), { visible_tabs: next });
-                                            }}
-                                            className="rounded text-indigo-600"
-                                        />
-                                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</span>
-                                    </label>
-                                ))}
-                            </div>
-                            <button onClick={() => setIsTabSettingsOpen(false)} className="mt-5 w-full rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">Fermer</button>
-                        </div>
-                    </div>
+                {settingsSection && canEdit && (
+                    <TripSettingsModal
+                        trip={trip}
+                        visibleTabs={visibleTabs}
+                        initialSection={settingsSection}
+                        onTabsChange={(next) => {
+                            setVisibleTabs(next);
+                            if (!next.includes(activeTab)) setActiveTab("program");
+                        }}
+                        onClose={() => setSettingsSection(null)}
+                    />
                 )}
 
-                {isEditingTrip && canEdit && (
-                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 dark:border-slate-700 space-y-6">
-                            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-xl">
-                                        <Settings className="w-6 h-6" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                                            Paramètres du voyage
-                                        </h3>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                                            Modifiez le titre, la description et
-                                            les dates globales.
-                                        </p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setIsEditingTrip(false)}
-                                    className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </div>
-
-                            <form
-                                onSubmit={handleUpdateTrip}
-                                className="space-y-4"
-                            >
-                                <div>
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-                                        Titre du voyage
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={editTripForm.data.title}
-                                        onChange={(e) =>
-                                            editTripForm.setData(
-                                                "title",
-                                                e.target.value,
-                                            )
-                                        }
-                                        className="w-full text-sm rounded-xl border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-                                        Description
-                                    </label>
-                                    <textarea
-                                        value={editTripForm.data.description}
-                                        onChange={(e) =>
-                                            editTripForm.setData(
-                                                "description",
-                                                e.target.value,
-                                            )
-                                        }
-                                        rows="3"
-                                        className="w-full text-sm rounded-xl border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                                    ></textarea>
-                                </div>
-                                <DateRangePicker
-                                    startDate={editTripForm.data.start_date}
-                                    endDate={editTripForm.data.end_date}
-                                    onChange={(start_date, end_date) =>
-                                        editTripForm.setData({
-                                            ...editTripForm.data,
-                                            start_date,
-                                            end_date,
-                                        })
-                                    }
-                                />
-                                <div className="flex justify-end items-center gap-3 mt-8 pt-4 border-t border-slate-100 dark:border-slate-700">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsEditingTrip(false)}
-                                        className="px-4 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-white transition"
-                                    >
-                                        Annuler
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={editTripForm.processing}
-                                        className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-md transition"
-                                    >
-                                        Enregistrer les modifications
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
+                {isShareOpen && canViewShareLink && <ShareTripModal trip={trip} onClose={() => setIsShareOpen(false)} />}
 
                 {editingStay && canEdit && (
                     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -713,225 +497,6 @@ function ShowContent({ trip }) {
                     </div>
                 )}
 
-                {isShareModalOpen && canViewShareLink && (
-                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 dark:border-slate-700">
-                            <div className="flex items-center justify-between mb-6 border-b border-slate-100 dark:border-slate-700 pb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-xl">
-                                        <Share2 className="w-6 h-6" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                                            {canManageAccess
-                                                ? "Gérer l'accès au voyage"
-                                                : "Lien de partage"}
-                                        </h3>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                                            Toute personne disposant du lien
-                                            accède au voyage en lecture seule.
-                                        </p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setIsShareModalOpen(false)}
-                                    className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </div>
-
-                            <div className="space-y-6">
-                                <div className="space-y-2">
-                                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                                        Lien d'invitation permanent
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="text"
-                                            readOnly
-                                            value={shareUrl}
-                                            className="w-full text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-600 dark:text-slate-300 select-all"
-                                        />
-                                        <button
-                                            onClick={copyToClipboard}
-                                            className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shrink-0"
-                                        >
-                                            {copied ? (
-                                                <Check className="w-4 h-4" />
-                                            ) : (
-                                                <Copy className="w-4 h-4" />
-                                            )}
-                                            {copied ? "Copié !" : "Copier"}
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {canManageAccess && (
-                                    <>
-                                        <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700">
-                                            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                                                Ajouter un compte manuellement
-                                            </label>
-                                            <form
-                                                onSubmit={inviteMember}
-                                                className="flex items-center gap-2"
-                                            >
-                                                <input
-                                                    type="email"
-                                                    required
-                                                    placeholder="email@exemple.com"
-                                                    value={inviteEmail}
-                                                    onChange={(e) =>
-                                                        setInviteEmail(
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    className="flex-1 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-indigo-500"
-                                                />
-                                                <select
-                                                    value={inviteRole}
-                                                    onChange={(e) =>
-                                                        setInviteRole(
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 text-slate-700 dark:text-slate-300"
-                                                >
-                                                    <option value="viewer">
-                                                        Lecteur
-                                                    </option>
-                                                    <option value="editor">
-                                                        Éditeur
-                                                    </option>
-                                                </select>
-                                                <button
-                                                    type="submit"
-                                                    disabled={inviteProcessing}
-                                                    className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-md transition shrink-0"
-                                                >
-                                                    {inviteProcessing
-                                                        ? "..."
-                                                        : "Inviter"}
-                                                </button>
-                                            </form>
-                                            {inviteError && (
-                                                <p className="text-red-500 text-xs mt-1">
-                                                    {inviteError}
-                                                </p>
-                                            )}
-                                        </div>
-
-                                        <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-700">
-                                            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                                                Personnes ayant accès (
-                                                {members.length})
-                                            </label>
-                                            <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
-                                                {members.length === 0 && (
-                                                    <p className="text-xs text-slate-400 text-center py-4">
-                                                        Personne d'autre n'a
-                                                        encore accès à ce
-                                                        voyage.
-                                                    </p>
-                                                )}
-                                                {members.map((member) => (
-                                                    <div
-                                                        key={member.id}
-                                                        className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60"
-                                                    >
-                                                        <div>
-                                                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                                                                {member.name ||
-                                                                    member.email}
-                                                            </p>
-                                                            <p className="text-xs text-slate-400">
-                                                                {member.email}
-                                                                {member.status ===
-                                                                    "pending" &&
-                                                                    " · en attente"}
-                                                            </p>
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            {canManageRoles ? (
-                                                                <>
-                                                                    <select
-                                                                        value={
-                                                                            member.role
-                                                                        }
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            updateRole(
-                                                                                member.id,
-                                                                                e
-                                                                                    .target
-                                                                                    .value,
-                                                                            )
-                                                                        }
-                                                                        className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-slate-700 dark:text-slate-300 focus:ring-indigo-500 focus:border-indigo-500"
-                                                                    >
-                                                                        <option value="admin">
-                                                                            Admin
-                                                                        </option>
-                                                                        <option value="editor">
-                                                                            Éditeur
-                                                                            (Lecture/Écriture)
-                                                                        </option>
-                                                                        <option value="viewer">
-                                                                            Lecteur
-                                                                            (Read-only)
-                                                                        </option>
-                                                                    </select>
-                                                                    <button
-                                                                        onClick={() =>
-                                                                            removeMember(
-                                                                                member.id,
-                                                                            )
-                                                                        }
-                                                                        title="Révoquer l'accès"
-                                                                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition"
-                                                                    >
-                                                                        <Trash2 className="w-4 h-4" />
-                                                                    </button>
-                                                                </>
-                                                            ) : (
-                                                                <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg capitalize">
-                                                                    {
-                                                                        member.role
-                                                                    }
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                            {!canManageRoles && (
-                                                <p className="text-[11px] text-slate-400">
-                                                    Seul le propriétaire peut
-                                                    modifier les rôles ou
-                                                    révoquer un accès.
-                                                </p>
-                                            )}
-                                        </div>
-                                    </>
-                                )}
-
-                                <div className="flex justify-end pt-2">
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            setIsShareModalOpen(false)
-                                        }
-                                        className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-lg transition"
-                                    >
-                                        Fermer
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
                 </div>
             </GuestLayout>
         </>

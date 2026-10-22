@@ -47,6 +47,8 @@ class RegisteredUserController extends Controller
 
         Auth::login($user);
 
-        return redirect(route('dashboard', absolute: false));
+        app(\App\Services\GuestAccountMerger::class)->merge($user, $request);
+
+        return redirect()->intended(route('dashboard', absolute: false));
     }
 }

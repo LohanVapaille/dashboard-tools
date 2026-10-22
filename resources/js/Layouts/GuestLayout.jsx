@@ -1,9 +1,11 @@
 import React from "react";
 import { Link, usePage } from "@inertiajs/react";
 import { Compass, LogIn, ShoppingCart, Ticket, User as UserIcon } from "lucide-react";
+import CookieConsent from "@/Components/CookieConsent";
+import { openCookieSettings } from "@/Utils/consent";
 
 export default function GuestLayout({ children }) {
-    const { auth, cart } = usePage().props;
+    const { auth, cart, legal } = usePage().props;
     const user = auth?.user;
     const cartCount = cart?.count || 0;
 
@@ -109,6 +111,20 @@ export default function GuestLayout({ children }) {
             </header>
 
             <main>{children}</main>
+
+            <footer className="mt-16 border-t border-slate-200 bg-white/70 px-6 py-8 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-900/70 print:hidden">
+                <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 md:flex-row">
+                    <p>© {new Date().getFullYear()} {legal?.company || "TravelPlanner"} · Intermédiaire de réservation de voyages</p>
+                    <nav className="flex flex-wrap justify-center gap-x-5 gap-y-2 font-semibold">
+                        <Link href={route("legal.notice")} className="hover:text-indigo-600">Mentions légales</Link>
+                        <Link href={route("legal.terms")} className="hover:text-indigo-600">Conditions générales</Link>
+                        <Link href={route("legal.privacy")} className="hover:text-indigo-600">Confidentialité et cookies</Link>
+                        <button type="button" onClick={openCookieSettings} className="font-semibold hover:text-indigo-600">Gérer mes cookies</button>
+                    </nav>
+                </div>
+            </footer>
+
+            <CookieConsent />
         </div>
     );
 }

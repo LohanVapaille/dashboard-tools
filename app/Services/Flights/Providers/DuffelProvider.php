@@ -54,11 +54,76 @@ class DuffelProvider implements FlightProvider
      *
      * @return array{0: ?array, 1: array} [offre normalisée, offre brute Duffel]
      */
-    public function refresh(string $offerId): array
+    public function refresh(string $offerId, bool $withServices = false): array
     {
-        $raw = $this->client->getOffer($offerId);
+        $raw = $this->client->getOffer($offerId, $withServices);
 
         return [$this->normalize($raw), $raw];
+    }
+
+    /**
+     * Bagages payants proposés par la compagnie, par passager.
+     * Les prix renvoyés incluent déjà les taxes et frais de l'application.
+     */
+    public static function baggageOptions(array $rawOffer): array
+    {
+        $passengerIds = self::passengerIds($rawOffer);
+        $segments = collect($rawOffer['slices'][0]['segments'] ?? [])->keyBy('id');
+
+        return collect($rawOffer['available_services'] ?? [])
+            ->where('type', 'baggage')
+            ->map(function (array $service) use ($passengerIds, $segments) {
+                $amount = (float) $service['total_amount'];
+                $covered = collect($service['segment_ids'] ?? []);
+
+                return [
+                    'id' => $service['id'],
+                    'kind' => $service['metadata']['type'] ?? 'checked',
+                    'max_weight_kg' => $service['metadata']['maximum_weight_kg'] ?? null,
+                    'max_quantity' => (int) ($service['maximum_quantity'] ?? 1),
+                    'passenger_index' => array_search($service['passenger_ids'][0] ?? null, $passengerIds, true),
+                    'whole_journey' => $covered->count() >= $segments->count(),
+                    'segments' => $covered->map(fn ($id) => trim(($segments[$id]['origin']['iata_code'] ?? '') . '→' . ($segments[$id]['destination']['iata_code'] ?? ''), '→'))->filter()->values(),
+                    'currency' => strtoupper($service['total_currency']),
+                    'airline_amount' => $amount,
+                    'total_amount' => FlightPricing::total($amount),
+                ];
+            })
+            ->filter(fn (array $option) => $option['passenger_index'] !== false)
+            ->sortBy([['passenger_index', 'asc'], ['total_amount', 'asc']])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Vérifie les bagages choisis contre l'offre à jour.
+     *
+     * @return array{0: array, 1: float} [services retenus, montant compagnie des bagages]
+     */
+    public static function resolveServices(array $rawOffer, array $selected): array
+    {
+        $options = collect(self::baggageOptions($rawOffer))->keyBy('id');
+        $services = [];
+        $amount = 0.0;
+
+        foreach ($selected as $choice) {
+            $option = $options->get($choice['id'] ?? null);
+            $quantity = (int) ($choice['quantity'] ?? 0);
+            if (!$option || $quantity < 1 || $quantity > $option['max_quantity']) {
+                throw new \App\Services\Flights\FlightProviderException('Un bagage choisi n’est plus proposé par la compagnie. Vérifiez vos bagages.');
+            }
+            $services[] = [
+                'id' => $option['id'],
+                'quantity' => $quantity,
+                'kind' => $option['kind'],
+                'max_weight_kg' => $option['max_weight_kg'],
+                'passenger_index' => $option['passenger_index'],
+                'airline_amount' => round($option['airline_amount'] * $quantity, 2),
+            ];
+            $amount += $option['airline_amount'] * $quantity;
+        }
+
+        return [$services, round($amount, 2)];
     }
 
     public function normalize(array $offer): ?array

@@ -50,6 +50,8 @@ return [
             'enabled' => (bool) env('TRAVELPAYOUTS_TOKEN'),
             'token' => env('TRAVELPAYOUTS_TOKEN'),
             'marker' => env('TRAVELPAYOUTS_MARKER'),
+            // Script « Drive » : convertit automatiquement les liens sortants en liens affiliés.
+            'drive' => filter_var(env('TRAVELPAYOUTS_DRIVE', false), FILTER_VALIDATE_BOOLEAN),
             'base_url' => env('TRAVELPAYOUTS_BASE_URL', 'https://api.travelpayouts.com'),
         ],
     ],

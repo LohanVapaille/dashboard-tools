@@ -37,9 +37,21 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'status' => fn () => $request->session()->get('status'),
             ],
+            'legal' => fn () => [
+                'company' => config('legal.company'),
+                'consent_days' => config('legal.consent_days'),
+                'affiliate_enabled' => (bool) config('flights.providers.travelpayouts.drive'),
+            ],
+            // Script d'affiliation Travelpayouts : chargé seulement après consentement, sur les pages à liens partenaires.
+            'affiliate' => fn () => [
+                'drive_script' => config('flights.providers.travelpayouts.drive') && ($marker = config('flights.providers.travelpayouts.marker'))
+                    ? 'https://tpembars.com/' . base64_encode((string) $marker) . '.js?t=' . rawurlencode((string) $marker)
+                    : null,
+            ],
             'cart' => fn () => [
                 'count' => $request->user()
                     ? \App\Models\FlightCartItem::active()->where('user_id', $request->user()->id)->count()
+                        + \App\Models\StayCartItem::active()->where('user_id', $request->user()->id)->count()
                     : 0,
             ],
         ];

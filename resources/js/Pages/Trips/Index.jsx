@@ -1,17 +1,18 @@
 import React, { useMemo, useState } from "react";
 import GuestLayout from "@/Layouts/GuestLayout";
-import Modal from "@/Components/Modal";
-import DateRangePicker from "@/Components/DateRangePicker";
-import { Head, Link, useForm, router } from "@inertiajs/react";
+import TripCreator from "@/Components/TripCreator";
+import { Head, Link, router, usePage } from "@inertiajs/react";
 import {
-    Plus,
+    Plane,
+    BedDouble,
+    Sparkles,
+    ShieldCheck,
     MapPin,
     Calendar,
     Compass,
     Trash2,
     LogOut,
     ArrowUpDown,
-    AlertTriangle,
 } from "lucide-react";
 
 function formatDate(value) {
@@ -107,34 +108,12 @@ function TripCard({ trip, variant, onDestroy, onLeave }) {
     );
 }
 
-export default function Index({ ownedTrips = [], joinedTrips = [] }) {
-    const [isOpen, setIsOpen] = useState(false);
+export default function Index({ ownedTrips = [], joinedTrips = [], guestTripsRemaining = null }) {
+    const { auth } = usePage().props;
     const [sortBy, setSortBy] = useState("date");
-    const { data, setData, post, processing, errors, reset } = useForm({
-        title: "",
-        description: "",
-        start_date: "",
-        end_date: "",
-    });
 
-    const sortedOwned = useMemo(
-        () => sortTrips(ownedTrips, sortBy),
-        [ownedTrips, sortBy],
-    );
-    const sortedJoined = useMemo(
-        () => sortTrips(joinedTrips, sortBy),
-        [joinedTrips, sortBy],
-    );
-
-    const submit = (e) => {
-        e.preventDefault();
-        post(route("trips.store"), {
-            onSuccess: () => {
-                setIsOpen(false);
-                reset();
-            },
-        });
-    };
+    const sortedOwned = useMemo(() => sortTrips(ownedTrips, sortBy), [ownedTrips, sortBy]);
+    const sortedJoined = useMemo(() => sortTrips(joinedTrips, sortBy), [joinedTrips, sortBy]);
 
     const destroy = (trip) => {
         if (confirm(`Supprimer le voyage "${trip.title}" ?`)) {
@@ -143,80 +122,73 @@ export default function Index({ ownedTrips = [], joinedTrips = [] }) {
     };
 
     const leave = (trip) => {
-        if (
-            confirm(`Quitter le voyage "${trip.title}" ? Vous perdrez l'accès.`)
-        ) {
+        if (confirm(`Quitter le voyage "${trip.title}" ? Vous perdrez l'accès.`)) {
             router.delete(route("trips.leave", trip.id));
         }
     };
 
-    const total = ownedTrips.length + joinedTrips.length;
+    const firstName = auth?.user?.name?.split(" ")[0];
 
     return (
         <GuestLayout>
             <Head title="Mes Voyages" />
 
-            <div className="bg-gradient-to-r from-sky-500 via-indigo-600 to-violet-600">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex flex-wrap items-center justify-between gap-4">
-                    <div className="text-white">
-                        <div className="inline-flex items-center gap-2 text-blue-100 text-sm font-medium mb-1">
-                            <Compass className="w-4 h-4" />
-                            Planificateur d'itinéraires
-                        </div>
-                        <h1 className="text-3xl font-bold">Mes Voyages</h1>
-                        <p className="text-blue-100 mt-1">
-                            {total} voyage{total > 1 ? "s" : ""} accessible
-                            {total > 1 ? "s" : ""}
+            <section className="relative overflow-hidden bg-gradient-to-br from-sky-500 via-indigo-600 to-fuchsia-600">
+                <div className="pointer-events-none absolute -left-24 top-10 h-80 w-80 rounded-full bg-sky-300/30 blur-3xl" />
+                <div className="pointer-events-none absolute -right-20 -top-24 h-96 w-96 rounded-full bg-fuchsia-300/30 blur-3xl" />
+                <div className="pointer-events-none absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-amber-200/20 blur-3xl" />
+
+                <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-12 sm:px-6 lg:px-8">
+                    <div className="mx-auto max-w-2xl text-center text-white">
+                        <p className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold backdrop-blur">
+                            <Sparkles className="h-3.5 w-3.5" /> {firstName ? `Bonjour ${firstName} !` : "Planifiez, réservez, partagez"}
+                        </p>
+                        <h1 className="mt-4 text-4xl font-black tracking-tight sm:text-5xl">Où partez-vous ?</h1>
+                        <p className="mt-3 text-base text-white/85">
+                            Indiquez votre départ, vos étapes et vos dates : votre itinéraire, vos vols et vos hébergements se préparent au même endroit.
                         </p>
                     </div>
-                    <button
-                        onClick={() => setIsOpen(true)}
-                        className="inline-flex items-center gap-2 bg-white text-blue-700 hover:bg-blue-50 px-4 py-2.5 rounded-lg font-semibold shadow-lg transition"
-                    >
-                        <Plus className="w-5 h-5" />
-                        Nouveau voyage
-                    </button>
-                </div>
-            </div>
 
-            <div className="py-8 max-w-7xl mx-auto sm:px-6 lg:px-8 px-4 space-y-10">
-                <div className="flex justify-end">
+                    <div className="mt-8">
+                        <TripCreator guestTripsRemaining={guestTripsRemaining} />
+                    </div>
+
+                    <div className="mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs font-semibold text-white/85">
+                        <span className="inline-flex items-center gap-1.5"><Plane className="h-4 w-4" /> Vols de plus de 300 compagnies</span>
+                        <span className="inline-flex items-center gap-1.5"><BedDouble className="h-4 w-4" /> Hôtels, appartements, campings…</span>
+                        <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4" /> Paiement sécurisé</span>
+                    </div>
+                </div>
+            </section>
+
+            <div className="mx-auto max-w-7xl space-y-10 px-4 py-10 sm:px-6 lg:px-8">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="flex items-center gap-2 text-2xl font-black text-slate-900 dark:text-white">
+                        <Compass className="h-6 w-6 text-indigo-600" /> Vos voyages
+                        <span className="text-base font-semibold text-slate-400">({ownedTrips.length + joinedTrips.length})</span>
+                    </h2>
                     <button
-                        onClick={() =>
-                            setSortBy(sortBy === "date" ? "title" : "date")
-                        }
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-blue-600 bg-white border border-slate-200 px-3 py-1.5 rounded-lg transition"
+                        onClick={() => setSortBy(sortBy === "date" ? "title" : "date")}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-500 transition hover:text-indigo-600"
                     >
-                        <ArrowUpDown className="w-3.5 h-3.5" />
+                        <ArrowUpDown className="h-3.5 w-3.5" />
                         Trier par {sortBy === "date" ? "titre" : "date"}
                     </button>
                 </div>
 
                 <section className="space-y-4">
-                    <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                    <h3 className="flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
+                        <span className="h-2.5 w-2.5 rounded-full bg-indigo-500" />
                         Mes voyages ({sortedOwned.length})
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    </h3>
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {sortedOwned.length > 0 ? (
-                            sortedOwned.map((trip) => (
-                                <TripCard
-                                    key={trip.id}
-                                    trip={trip}
-                                    variant="owned"
-                                    onDestroy={destroy}
-                                />
-                            ))
+                            sortedOwned.map((trip) => <TripCard key={trip.id} trip={trip} variant="owned" onDestroy={destroy} />)
                         ) : (
-                            <div className="col-span-full text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300">
-                                <Compass className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                                <p className="text-gray-500 font-medium">
-                                    Aucun voyage créé pour le moment.
-                                </p>
-                                <p className="text-gray-400 text-sm mt-1">
-                                    Cliquez sur "Nouveau voyage" pour créer
-                                    votre premier itinéraire.
-                                </p>
+                            <div className="col-span-full rounded-2xl border border-dashed border-gray-300 bg-white py-14 text-center">
+                                <Compass className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+                                <p className="font-medium text-gray-500">Aucun voyage créé pour le moment.</p>
+                                <p className="mt-1 text-sm text-gray-400">Remplissez le formulaire ci-dessus pour créer votre premier itinéraire.</p>
                             </div>
                         )}
                     </div>
@@ -224,107 +196,16 @@ export default function Index({ ownedTrips = [], joinedTrips = [] }) {
 
                 {sortedJoined.length > 0 && (
                     <section className="space-y-4">
-                        <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                        <h3 className="flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
+                            <span className="h-2.5 w-2.5 rounded-full bg-fuchsia-500" />
                             Voyages rejoints ({sortedJoined.length})
-                        </h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {sortedJoined.map((trip) => (
-                                <TripCard
-                                    key={trip.id}
-                                    trip={trip}
-                                    variant="joined"
-                                    onLeave={leave}
-                                />
-                            ))}
+                        </h3>
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                            {sortedJoined.map((trip) => <TripCard key={trip.id} trip={trip} variant="joined" onLeave={leave} />)}
                         </div>
                     </section>
                 )}
             </div>
-
-            <Modal show={isOpen} onClose={() => setIsOpen(false)} maxWidth="md">
-                <form onSubmit={submit} className="p-6 space-y-4">
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">
-                        Créer un voyage
-                    </h3>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                            Titre
-                        </label>
-                        <input
-                            type="text"
-                            value={data.title}
-                            onChange={(e) => setData("title", e.target.value)}
-                            className="mt-1 w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                            placeholder="Road trip en Italie"
-                            required
-                        />
-                        {errors.title && (
-                            <div className="text-red-500 text-xs mt-1">
-                                {errors.title}
-                            </div>
-                        )}
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                            Description
-                        </label>
-                        <textarea
-                            value={data.description}
-                            onChange={(e) =>
-                                setData("description", e.target.value)
-                            }
-                            className="mt-1 w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                            rows="3"
-                        />
-                    </div>
-                    <DateRangePicker
-                        startDate={data.start_date}
-                        endDate={data.end_date}
-                        onChange={(start_date, end_date) => {
-                            setData("start_date", start_date);
-                            setData("end_date", end_date);
-                        }}
-                    />
-                    {(errors.start_date || errors.end_date) && (
-                        <div className="text-xs text-red-500">
-                            {errors.start_date || errors.end_date}
-                        </div>
-                    )}
-
-                    {errors.guest_limit && (
-                        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-xs font-medium rounded-xl p-3 flex items-start gap-2">
-                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                            <span>
-                                {errors.guest_limit}{" "}
-                                <Link
-                                    href={route("register")}
-                                    className="underline font-semibold"
-                                >
-                                    Créer un compte gratuit
-                                </Link>
-                            </span>
-                        </div>
-                    )}
-
-                    <div className="flex justify-end gap-3 pt-2">
-                        <button
-                            type="button"
-                            onClick={() => setIsOpen(false)}
-                            className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                        >
-                            Annuler
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={processing}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                        >
-                            Enregistrer
-                        </button>
-                    </div>
-                </form>
-            </Modal>
         </GuestLayout>
     );
 }

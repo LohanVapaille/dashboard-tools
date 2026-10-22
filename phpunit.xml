@@ -32,5 +32,8 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!-- Les tests ne doivent jamais appeler les vraies API de réservation. -->
+        <env name="LITEAPI_KEY" value="" force="true"/>
+        <env name="TRAVELPAYOUTS_DRIVE" value="false" force="true"/>
     </php>
 </phpunit>

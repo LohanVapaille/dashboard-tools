@@ -26,7 +26,14 @@ class FlightOrderController extends Controller
             ->get()
             ->map(fn (FlightOrder $order) => $this->present($order));
 
-        return Inertia::render('Flights/Orders', ['orders' => $orders]);
+        $stayOrders = \App\Models\StayOrder::with('bookings')
+            ->where('user_id', $request->user()->id)
+            ->whereNotNull('paid_at')
+            ->latest()
+            ->get()
+            ->map(fn (\App\Models\StayOrder $order) => StayOrderController::present($order));
+
+        return Inertia::render('Reservations/Index', ['flightOrders' => $orders, 'stayOrders' => $stayOrders]);
     }
 
     public function show(Request $request, FlightOrder $order)
@@ -175,6 +182,8 @@ class FlightOrderController extends Controller
                 'fee_amount' => (float) $booking->service_fee,
                 'total_amount' => (float) $booking->total_amount,
                 'refunded_amount' => (float) $booking->refunded_amount,
+                'services' => $booking->services ?? [],
+                'services_amount' => (float) $booking->services_amount,
                 'failure_reason' => $booking->failure_reason,
                 'cancelled_at' => $booking->cancelled_at?->toIso8601String(),
                 'tax_refund_requested_at' => $booking->tax_refund_requested_at?->toIso8601String(),

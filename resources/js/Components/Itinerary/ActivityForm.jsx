@@ -97,7 +97,7 @@ export default function ActivityForm({
                     type="number"
                     step="0.01"
                     min="0"
-                    placeholder="Prix (€)"
+                    placeholder="Prix / pers. (€)"
                     value={data.price}
                     onChange={(e) => setData("price", e.target.value)}
                     className="text-sm rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-white"

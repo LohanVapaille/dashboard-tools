@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { Droppable, Draggable } from "@hello-pangea/dnd";
 import DynamicIcon from "./DynamicIcon";
 import ActivityItem from "./ActivityItem";
+import { droppableIdFor } from "./ActivityBoard";
 import { useTripPermissions } from "@/Contexts/TripPermissionsContext";
 
 const PERIOD_LABELS = {
@@ -80,7 +81,7 @@ export default function PeriodSlot({
             </div>
 
             {/* Zone de drop UNIQUEMENT pour la liste des activités sous le titre */}
-            <Droppable droppableId={periodKey} isDropDisabled={!canEdit}>
+            <Droppable droppableId={droppableIdFor(dayId, periodKey)} isDropDisabled={!canEdit}>
                 {(provided, snapshot) => (
                     <div
                         ref={provided.innerRef}
@@ -144,7 +145,7 @@ export default function PeriodSlot({
                                     </select>
                                     <input
                                         type="number"
-                                        placeholder="Prix (€)"
+                                        placeholder="Prix / pers. (€)"
                                         value={price}
                                         onChange={(e) => setPrice(e.target.value)}
                                         className="text-xs rounded border-slate-300 dark:bg-slate-900 dark:text-white"

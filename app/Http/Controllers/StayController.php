@@ -89,4 +89,12 @@ class StayController extends Controller
 
         return back();
     }
+
+    public function destroy(Stay $stay)
+    {
+        // Les jours, activités et trajets liés sont supprimés en cascade.
+        $stay->delete();
+
+        return back();
+    }
 }

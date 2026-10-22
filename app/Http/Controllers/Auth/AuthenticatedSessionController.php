@@ -33,6 +33,8 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        app(\App\Services\GuestAccountMerger::class)->merge($request->user(), $request);
+
         return redirect()->intended(route('dashboard', absolute: false));
     }
 

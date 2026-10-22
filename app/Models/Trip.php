@@ -16,11 +16,20 @@ class Trip extends Model
         'guest_token',
         'is_private',
         'visible_tabs',
+        'origin_name',
+        'origin_latitude',
+        'origin_longitude',
+        'travelers',
+        'budget_target',
     ];
 
     protected $casts = [
         'is_private' => 'boolean',
         'visible_tabs' => 'array',
+        'origin_latitude' => 'float',
+        'origin_longitude' => 'float',
+        'travelers' => 'integer',
+        'budget_target' => 'decimal:2',
     ];
 
     public function user()
@@ -46,6 +55,16 @@ class Trip extends Model
     public function participants()
     {
         return $this->hasMany(TripParticipant::class);
+    }
+
+    public function budgetMembers()
+    {
+        return $this->hasMany(TripBudgetMember::class)->orderBy('id');
+    }
+
+    public function expenses()
+    {
+        return $this->hasMany(TripExpense::class)->latest('spent_on')->latest('id');
     }
 
     public function photos()

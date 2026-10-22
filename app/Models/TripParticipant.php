@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class TripParticipant extends Model
 {
-    protected $fillable = ['trip_id', 'user_id', 'guest_token', 'email', 'role', 'status'];
+    protected $fillable = ['trip_id', 'user_id', 'guest_token', 'guest_name', 'email', 'role', 'status'];
 
     public function trip()
     {

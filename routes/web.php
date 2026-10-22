@@ -24,11 +24,18 @@ use App\Http\Controllers\TripMemberController;
 use App\Http\Controllers\TripInviteController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\AIItineraryController;
+use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\TripPhotoController;
 use App\Http\Controllers\TripTabController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\TravelSearchController;
+use App\Http\Controllers\CartController;
 use App\Http\Controllers\FlightCartController;
+use App\Http\Controllers\StayCartController;
+use App\Http\Controllers\StayCheckoutController;
+use App\Http\Controllers\StayOrderController;
+use App\Http\Controllers\StaySearchController;
+use App\Http\Controllers\PlaceSuggestionController;
 use App\Http\Controllers\FlightCheckoutController;
 use App\Http\Controllers\FlightOrderController;
 
@@ -42,8 +49,6 @@ Route::middleware('guest')->group(function () {
     Route::get('reset-password/{token}', [NewPasswordController::class, 'create'])->name('password.reset');
     Route::post('reset-password', [NewPasswordController::class, 'store'])->name('password.store');
 
-    Route::get('/invite/{token}', [TripInviteController::class, 'show'])->name('trips.invite.show');
-    Route::post('/invite/{token}/guest', [TripInviteController::class, 'joinAsGuest'])->name('trips.invite.guest');
 });
 
 Route::middleware('auth')->group(function () {
@@ -82,25 +87,34 @@ Route::middleware('auth')->group(function () {
     Route::post('/trips/{trip}/share', [TripController::class, 'generateShareLink'])
         ->middleware('check.trip.access:manage_access')->name('trips.share');
 
-    Route::post('/invite/{token}/join', [TripInviteController::class, 'joinAsUser'])->name('trips.invite.join');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->middleware('throttle:10,1')->name('profile.avatar.update');
+    Route::delete('/profile/avatar', [ProfileController::class, 'destroyAvatar'])->name('profile.avatar.destroy');
 
     Route::delete('/trips/{trip}/leave', [TripController::class, 'leave'])->name('trips.leave');
     Route::patch('/trips/{trip}/tabs', [TripTabController::class, 'update'])->name('trips.tabs.update');
     Route::post('/trips/{trip}/photos', [TripPhotoController::class, 'store'])->name('trips.photos.store');
     Route::delete('/trip-photos/{photo}', [TripPhotoController::class, 'destroy'])->name('trips.photos.destroy');
-    Route::post('/trips/{trip}/travel-search/lodgings', [TravelSearchController::class, 'lodgings'])->name('trips.travel-search.lodgings');
 
     // Panier et achat de billets d'avion
-    Route::get('/panier', [FlightCartController::class, 'index'])->name('flights.cart.index');
+    Route::get('/panier', [CartController::class, 'index'])->name('flights.cart.index');
     Route::post('/panier/vols', [FlightCartController::class, 'store'])->middleware('throttle:20,1')->name('flights.cart.store');
     Route::delete('/panier/vols/{item}', [FlightCartController::class, 'destroy'])->name('flights.cart.destroy');
-    Route::delete('/panier', [FlightCartController::class, 'clear'])->name('flights.cart.clear');
+    Route::delete('/panier', [CartController::class, 'clear'])->name('flights.cart.clear');
     Route::post('/panier/paiement', [FlightCheckoutController::class, 'store'])->middleware('throttle:10,1')->name('flights.checkout.store');
     Route::get('/reservations/{order}/paiement-confirme', [FlightCheckoutController::class, 'success'])->name('flights.checkout.success');
+
+    // Hébergements : panier et paiement distincts des vols
+    Route::post('/panier/logements', [StayCartController::class, 'store'])->middleware('throttle:20,1')->name('stays.cart.store');
+    Route::delete('/panier/logements/{item}', [StayCartController::class, 'destroy'])->name('stays.cart.destroy');
+    Route::post('/panier/logements/paiement', [StayCheckoutController::class, 'store'])->middleware('throttle:10,1')->name('stays.checkout.store');
+    Route::get('/reservations/logements/{order}', [StayOrderController::class, 'show'])->name('stays.orders.show');
+    Route::get('/reservations/logements/{order}/statut', [StayOrderController::class, 'status'])->name('stays.orders.status');
+    Route::get('/reservations/logements/{order}/paiement-confirme', [StayCheckoutController::class, 'success'])->name('stays.checkout.success');
+    Route::post('/reservations/logements/{order}/sejours/{booking}/annulation', [StayOrderController::class, 'cancel'])->name('stays.bookings.cancel');
 
     Route::get('/reservations', [FlightOrderController::class, 'index'])->name('flights.orders.index');
     Route::get('/reservations/{order}', [FlightOrderController::class, 'show'])->name('flights.orders.show');
@@ -119,20 +133,47 @@ Route::post('/stripe/flights/webhook', [FlightCheckoutController::class, 'webhoo
 
 // Recherche de vols : accessible aussi aux invités d'un voyage
 Route::get('/flights/airports', [TravelSearchController::class, 'airports'])->middleware('throttle:120,1')->name('flights.airports');
-Route::get('/flights/airports/nearest', [TravelSearchController::class, 'nearestAirports'])->middleware('throttle:30,1')->name('flights.airports.nearest');
+Route::get('/flights/offers/{offerId}/baggage', [FlightCartController::class, 'baggage'])->middleware('throttle:30,1')->name('flights.offers.baggage');
+Route::get('/flights/airports/nearest',[TravelSearchController::class, 'nearestAirports'])->middleware('throttle:30,1')->name('flights.airports.nearest');
+Route::post('/trips/{trip}/stays-search', [StaySearchController::class, 'search'])->middleware('throttle:20,1')->name('trips.stays.search');
+Route::post('/trips/{trip}/stays-listings', [StaySearchController::class, 'listings'])->middleware('throttle:20,1')->name('trips.stays.listings');
+Route::get('/stays/results/{searchResultId}/rates', [StaySearchController::class, 'rates'])->middleware('throttle:30,1')->name('stays.rates');
 Route::post('/trips/{trip}/travel-search/flights', [TravelSearchController::class, 'flights'])->middleware('throttle:20,1')->name('trips.travel-search.flights');
-Route::get('/conditions-de-vente-vols', fn () => Inertia\Inertia::render('Flights/Terms', [
+Route::get('/conditions-generales', fn () => Inertia\Inertia::render('Legal/Terms', [
     'seller' => config('flights.seller'),
-    'feePercent' => App\Services\Flights\FlightPricing::percent(),
-    'feeLabel' => config('flights.tax_label'),
-]))->name('flights.terms');
+    'flightFeePercent' => App\Services\Flights\FlightPricing::percent(),
+    'flightFeeLabel' => config('flights.tax_label'),
+    'stayFeePercent' => App\Services\Stays\StayPricing::percent(),
+    'stayFeeLabel' => config('stays.commission_label'),
+    'guestTripLimit' => TripController::GUEST_TRIP_LIMIT,
+]))->name('legal.terms');
+Route::get('/mentions-legales', fn () => Inertia\Inertia::render('Legal/Notice', [
+    'legal' => config('legal'),
+    'appUrl' => config('app.url'),
+]))->name('legal.notice');
+Route::get('/confidentialite', fn () => Inertia\Inertia::render('Legal/Privacy', [
+    'legal' => config('legal'),
+    'sessionCookie' => config('session.cookie'),
+    'sessionMinutes' => (int) config('session.lifetime'),
+    'affiliateEnabled' => (bool) config('flights.providers.travelpayouts.drive'),
+]))->name('legal.privacy');
+// Ancienne adresse conservée pour les liens déjà envoyés (e-mails de confirmation).
+Route::redirect('/conditions-de-vente-vols', '/conditions-generales', 301)->name('flights.terms');
 
 Route::get('/', fn() => redirect()->route('trips.index'));
 Route::get('/dashboard', fn() => redirect()->route('trips.index'))->name('dashboard');
 
-Route::get('/trips/join/{share_token}', [TripController::class, 'join'])->name('trips.join');
+// Lien de partage : la page n'a aucun effet, on rejoint en validant le formulaire (avec pseudo si invité).
+Route::get('/lieux/grandes-villes', [PlaceSuggestionController::class, 'cities'])->middleware('throttle:60,1')->name('places.cities');
+
+Route::get('/rejoindre/{token}', [TripInviteController::class, 'show'])->name('trips.join');
+Route::post('/rejoindre/{token}', [TripInviteController::class, 'join'])->middleware('throttle:10,1')->name('trips.join.store');
+// Anciens liens déjà partagés
+Route::get('/trips/join/{token}', fn (string $token) => redirect()->route('trips.join', $token));
+Route::get('/invite/{token}', fn (string $token) => redirect()->route('trips.join', $token))->name('trips.invite.show');
 
 Route::resource('trips', TripController::class);
+Route::get('/trips/{trip}/budget', [BudgetController::class, 'show'])->name('trips.budget.show');
 
 // Édition d'itinéraire — admin/editor/owner uniquement, appliqué une seule fois
 Route::middleware('check.trip.access:edit')->group(function () {
@@ -140,6 +181,15 @@ Route::middleware('check.trip.access:edit')->group(function () {
         ->middleware(['auth', 'throttle:ai-itinerary'])->name('trips.ai-itinerary.generate');
     Route::post('/trips/{trip}/ai-itinerary/store', [AIItineraryController::class, 'store'])
         ->middleware(['auth', 'throttle:30,1'])->name('trips.ai-itinerary.store');
+    Route::patch('/trips/{trip}/budget/target', [BudgetController::class, 'updateTarget'])->name('trips.budget.target');
+    Route::patch('/trips/{trip}/budget/planned', [BudgetController::class, 'updatePlanned'])->name('trips.budget.planned');
+    Route::post('/trips/{trip}/budget/members', [BudgetController::class, 'storeMember'])->name('trips.budget.members.store');
+    Route::patch('/trips/{trip}/budget/members/{member}', [BudgetController::class, 'updateMember'])->name('trips.budget.members.update');
+    Route::delete('/trips/{trip}/budget/members/{member}', [BudgetController::class, 'destroyMember'])->name('trips.budget.members.destroy');
+    Route::post('/trips/{trip}/expenses', [BudgetController::class, 'storeExpense'])->name('trips.expenses.store');
+    Route::put('/trips/{trip}/expenses/{expense}', [BudgetController::class, 'updateExpense'])->name('trips.expenses.update');
+    Route::delete('/trips/{trip}/expenses/{expense}', [BudgetController::class, 'destroyExpense'])->name('trips.expenses.destroy');
+
     Route::post('/trips/{trip}/notes', [TripNoteController::class, 'store'])->name('trip-notes.store');
     Route::patch('/trip-notes/{tripNote}', [TripNoteController::class, 'update'])->name('trip-notes.update');
     Route::delete('/trip-notes/{tripNote}', [TripNoteController::class, 'destroy'])->name('trip-notes.destroy');

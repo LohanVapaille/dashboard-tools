@@ -1,7 +1,5 @@
 import React, { useState } from "react";
 import { router } from "@inertiajs/react";
-import { DragDropContext } from "@hello-pangea/dnd";
-import axios from "axios";
 import {
     Plus,
     Check,
@@ -13,6 +11,7 @@ import {
     Moon,
 } from "lucide-react";
 import PeriodSlot from "./PeriodSlot";
+import { useDayActivities } from "./ActivityBoard";
 import DayBlockItem from "./DayBlockItem";
 import { BLOCK_TYPES } from "@/Constants/dayBlocks";
 import { formatDate } from "@/Utils/formatters";
@@ -38,7 +37,7 @@ const PERIODS = [
 
 export default function DayCard({ day, dayNumber, dayIndex = 0 }) {
     const [showMenu, setShowMenu] = useState(false);
-    const [activities, setActivities] = useState(day.activities || []);
+    const [activities, setActivities] = useDayActivities(day);
 
     const hiddenPeriods = day.hidden_periods || [];
     const blocks = day.blocks || [];
@@ -67,53 +66,25 @@ export default function DayCard({ day, dayNumber, dayIndex = 0 }) {
         );
     };
 
-    // Gestion du Drag & Drop global pour la journée
-    const handleDragEnd = (result) => {
-        if (!canEdit) return;
-        const { destination, source, draggableId } = result;
-
-        if (!destination) return;
-
-        if (
-            destination.droppableId === source.droppableId &&
-            destination.index === source.index
-        ) {
-            return;
-        }
-
-        const newPeriod = destination.droppableId;
-        const activityId = parseInt(draggableId);
-
-        // 1. Mise à jour instantanée de l'état local (UI fluide)
-        setActivities((prevActivities) =>
-            prevActivities.map((act) =>
-                act.id === activityId ? { ...act, period: newPeriod } : act,
-            ),
-        );
-
-        // 2. Sauvegarde en base de données en arrière-plan via Axios
-        axios
-            .patch(route("activities.update-period", activityId), {
-                period: newPeriod,
-            })
-            .catch((error) => {
-                console.error(
-                    "Erreur lors du déplacement de l'activité :",
-                    error,
-                );
-            });
-    };
-
     return (
-        <DragDropContext onDragEnd={handleDragEnd}>
-            <div className={`border-l-2 ${borderColorClass} pl-4 space-y-3`}>
+            <div className="space-y-3">
                 {/* En-tête de la journée */}
                 <div className="flex items-center justify-between gap-3">
-                    <div className="font-bold text-sm text-slate-700 dark:text-slate-200">
-                        Jour {dayNumber ?? day.day_number} —{" "}
-                        <span className="font-normal text-xs text-slate-500">
-                            {formatDate(day.date)}
+                    <div className="flex items-center gap-3">
+                        <span className={`flex h-12 w-12 flex-col items-center justify-center rounded-2xl border-l-4 ${borderColorClass} bg-slate-50 dark:bg-slate-900`}>
+                            <span className="text-[9px] font-bold uppercase leading-none text-slate-400">
+                                {new Date(`${day.date?.slice(0, 10)}T12:00:00`).toLocaleDateString("fr-FR", { month: "short" })}
+                            </span>
+                            <span className="text-lg font-black leading-none text-slate-800 dark:text-white">
+                                {new Date(`${day.date?.slice(0, 10)}T12:00:00`).getDate()}
+                            </span>
                         </span>
+                        <div>
+                            <p className="text-sm font-black text-slate-800 dark:text-slate-100">Jour {dayNumber ?? day.day_number}</p>
+                            <p className="text-xs capitalize text-slate-500">
+                                {new Date(`${day.date?.slice(0, 10)}T12:00:00`).toLocaleDateString("fr-FR", { weekday: "long" })} · {formatDate(day.date)}
+                            </p>
+                        </div>
                     </div>
 
                     <div className="relative">
@@ -127,7 +98,7 @@ export default function DayCard({ day, dayNumber, dayIndex = 0 }) {
                             }
                             className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl transition-colors ${
                                 canEdit
-                                    ? "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-950"
+                                    ? "bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-950"
                                     : "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed"
                             }`}
                         >
@@ -275,6 +246,5 @@ export default function DayCard({ day, dayNumber, dayIndex = 0 }) {
                     </div>
                 )}
             </div>
-        </DragDropContext>
     );
 }

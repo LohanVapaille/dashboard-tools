@@ -17,11 +17,13 @@ import {
     ShoppingCart,
     Users,
 } from "lucide-react";
+import { useAffiliateLinks } from "@/Utils/affiliate";
 import TransitionCard from "@/Components/Itinerary/TransitionCard";
 import DateRangePicker from "@/Components/DateRangePicker";
 import AirportCombobox from "@/Components/AirportCombobox";
 import FlightResults, { ResultsSkeleton } from "@/Components/Flights/FlightResults";
 import { AirlineLogo, FlightTimeline, OfferBadges, PriceBreakdown } from "@/Components/Flights/FlightOfferCard";
+import BaggageSelector, { baggagePayload, baggageTotal } from "@/Components/Flights/BaggageSelector";
 import { firstError, formatPrice, localDate, placeLabel } from "@/Utils/flights";
 
 const HOME_KEY = "travelplanner.flights.home";
@@ -123,12 +125,13 @@ function SelectedFlight({ label, offer, onChange, tone = "sky" }) {
 }
 
 export default function TransportTab({ trip }) {
+    useAffiliateLinks();
     const { props } = usePage();
     const user = props.auth?.user;
     const stays = trip.stays || [];
     const firstStay = stays[0];
     const lastStay = stays[stays.length - 1];
-    const defaultPassengers = Math.min(9, 1 + (trip.avatars?.length || 0));
+    const defaultPassengers = Math.min(9, trip.travelers || 1 + (trip.avatars?.length || 0));
 
     const [roundtrip, setRoundtrip] = useState(true);
     const [origin, setOrigin] = useState(readHome);
@@ -151,6 +154,7 @@ export default function TransportTab({ trip }) {
     const [errors, setErrors] = useState({});
     const [selection, setSelection] = useState({ outbound: null, return: null });
     const [cart, setCart] = useState({ loading: false, added: false, error: "" });
+    const [bags, setBags] = useState({ outbound: {}, return: {} });
 
     // Pré-remplissage : aéroports les plus proches des séjours du voyage.
     useEffect(() => {
@@ -203,8 +207,18 @@ export default function TransportTab({ trip }) {
         );
     };
 
+    // Départ : la ville indiquée à la création du voyage prime, sinon la position actuelle.
     useEffect(() => {
-        locate(true);
+        if (trip.origin_latitude && trip.origin_longitude) {
+            nearest(trip.origin_latitude, trip.origin_longitude)
+                .then((airports) => {
+                    setSuggestions((current) => ({ ...current, home: airports }));
+                    if (airports[0]) setOrigin(airports[0]);
+                })
+                .catch(() => locate(true));
+        } else {
+            locate(true);
+        }
     }, []);
 
     const legParams = {
@@ -259,6 +273,7 @@ export default function TransportTab({ trip }) {
 
     const selectOutbound = (offer) => {
         setSelection((current) => ({ ...current, outbound: offer }));
+        setBags((current) => ({ ...current, outbound: {} }));
         setCart({ loading: false, added: false, error: "" });
         goTo(roundtrip ? "return" : "review");
         window.scrollTo({ top: document.getElementById("transport-top")?.offsetTop ?? 0, behavior: "smooth" });
@@ -271,13 +286,15 @@ export default function TransportTab({ trip }) {
         }
         setErrors((current) => ({ ...current, return: "" }));
         setSelection((current) => ({ ...current, return: offer }));
+        setBags((current) => ({ ...current, return: {} }));
         setCart({ loading: false, added: false, error: "" });
         setStep("review");
         window.scrollTo({ top: document.getElementById("transport-top")?.offsetTop ?? 0, behavior: "smooth" });
     };
 
     const chosen = [selection.outbound, roundtrip ? selection.return : null].filter(Boolean);
-    const total = chosen.reduce((sum, offer) => sum + offer.total_amount, 0);
+    const bagsTotal = baggageTotal(bags.outbound) + (roundtrip ? baggageTotal(bags.return) : 0);
+    const total = chosen.reduce((sum, offer) => sum + offer.total_amount, 0) + bagsTotal;
     const currency = chosen[0]?.currency || "EUR";
     const currencyMismatch = chosen.length === 2 && chosen[0].currency !== chosen[1].currency;
 
@@ -288,10 +305,10 @@ export default function TransportTab({ trip }) {
                 trip_id: trip.id,
                 items: roundtrip
                     ? [
-                          { offer_id: selection.outbound.id, direction: "outbound" },
-                          { offer_id: selection.return.id, direction: "return" },
+                          { offer_id: selection.outbound.id, direction: "outbound", services: baggagePayload(bags.outbound) },
+                          { offer_id: selection.return.id, direction: "return", services: baggagePayload(bags.return) },
                       ]
-                    : [{ offer_id: selection.outbound.id, direction: "oneway" }],
+                    : [{ offer_id: selection.outbound.id, direction: "oneway", services: baggagePayload(bags.outbound) }],
             });
             setCart({ loading: false, added: true, error: "" });
             router.reload({ only: ["cart"] });
@@ -311,7 +328,7 @@ export default function TransportTab({ trip }) {
 
     return (
         <div className="space-y-6" id="transport-top">
-            <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-sky-500 via-indigo-600 to-violet-600 shadow-xl shadow-indigo-500/20">
+            <section className="relative z-20 rounded-3xl bg-gradient-to-br from-sky-500 via-indigo-600 to-violet-600 shadow-xl shadow-indigo-500/20">
                 <div className="flex flex-wrap items-center justify-between gap-4 px-6 pb-4 pt-6 text-white">
                     <div>
                         <h2 className="flex items-center gap-2 text-2xl font-black">
@@ -330,7 +347,7 @@ export default function TransportTab({ trip }) {
                             event.preventDefault();
                             search("outbound");
                         }}
-                        className="space-y-4 rounded-t-3xl bg-white p-5 dark:bg-slate-800"
+                        className="space-y-4 rounded-3xl bg-white p-5 dark:bg-slate-800"
                     >
                         <div className="flex flex-wrap items-center gap-2">
                             <div className="inline-flex rounded-xl bg-slate-100 p-1 dark:bg-slate-900">
@@ -365,7 +382,7 @@ export default function TransportTab({ trip }) {
                                 </select>
                             </label>
                             {defaultPassengers > 1 && (
-                                <span className="text-[11px] text-slate-400">{defaultPassengers} voyageurs d’après les membres du voyage</span>
+                                <span className="text-[11px] text-slate-400">{defaultPassengers} voyageurs prévus pour ce voyage</span>
                             )}
                         </div>
 
@@ -379,7 +396,7 @@ export default function TransportTab({ trip }) {
                                     localStorage.setItem(HOME_KEY, JSON.stringify(airport));
                                 }}
                                 suggestions={suggestions.home}
-                                suggestionsLabel="Près de vous :"
+                                suggestionsLabel={trip.origin_name ? `Près de ${trip.origin_name.split(",")[0]} :` : "Près de vous :"}
                                 required
                             />
                             <button type="button" onClick={swap} title="Inverser" className="mx-auto mt-6 rounded-full border border-slate-200 bg-white p-2 text-slate-500 shadow-sm transition hover:rotate-180 hover:text-indigo-600 dark:border-slate-600 dark:bg-slate-900">
@@ -435,7 +452,7 @@ export default function TransportTab({ trip }) {
                             event.preventDefault();
                             search("return");
                         }}
-                        className="space-y-4 rounded-t-3xl bg-white p-5 dark:bg-slate-800"
+                        className="space-y-4 rounded-3xl bg-white p-5 dark:bg-slate-800"
                     >
                         <SelectedFlight label="Aller choisi" offer={selection.outbound} onChange={() => setStep("outbound")} />
                         <div className="grid items-end gap-4 md:grid-cols-[1fr_1fr_1fr_auto]">
@@ -465,7 +482,7 @@ export default function TransportTab({ trip }) {
                 )}
 
                 {step === "review" && (
-                    <div className="space-y-4 rounded-t-3xl bg-white p-5 dark:bg-slate-800">
+                    <div className="space-y-4 rounded-3xl bg-white p-5 dark:bg-slate-800">
                         <SelectedFlight label={roundtrip ? "Aller" : "Aller simple"} offer={selection.outbound} onChange={() => setStep("outbound")} />
                         {roundtrip && selection.return && (
                             <SelectedFlight label="Retour" tone="violet" offer={selection.return} onChange={() => goTo("return")} />
@@ -513,17 +530,21 @@ export default function TransportTab({ trip }) {
             {step === "review" && selection.outbound && (
                 <section className="grid gap-5 lg:grid-cols-[1fr_22rem]">
                     <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
-                        <h3 className="font-black text-slate-900 dark:text-white">Conditions de vos billets</h3>
-                        {chosen.map((offer, index) => (
-                            <div key={offer.id} className="space-y-2">
-                                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{roundtrip ? (index === 0 ? "Aller" : "Retour") : "Vol"} · {offer.airline?.name}</p>
-                                <OfferBadges offer={offer} />
-                                <PriceBreakdown offer={offer} />
-                            </div>
-                        ))}
+                        <h3 className="font-black text-slate-900 dark:text-white">Bagages et conditions de vos billets</h3>
+                        {chosen.map((offer, index) => {
+                            const leg = index === 0 ? "outbound" : "return";
+                            return (
+                                <div key={offer.id} className="space-y-3 border-b border-slate-100 pb-4 last:border-0 dark:border-slate-700">
+                                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{roundtrip ? (index === 0 ? "Aller" : "Retour") : "Vol"} · {offer.airline?.name}</p>
+                                    <OfferBadges offer={offer} />
+                                    <BaggageSelector offer={offer} value={bags[leg]} onChange={(value) => setBags((current) => ({ ...current, [leg]: value }))} />
+                                    <PriceBreakdown offer={offer} />
+                                </div>
+                            );
+                        })}
                         <p className="text-xs leading-relaxed text-slate-500">
                             Les billets sont nominatifs. Le remboursement et la modification dépendent du tarif ci-dessus. En cas d’annulation ou de retard important par la compagnie, vous bénéficiez des droits du règlement européen 261/2004.{" "}
-                            <Link href={route("flights.terms")} className="font-semibold text-indigo-600 hover:underline">Conditions de vente</Link>
+                            <Link href={route("legal.terms")} className="font-semibold text-indigo-600 hover:underline">Conditions de vente</Link>
                         </p>
                     </div>
 
@@ -532,6 +553,7 @@ export default function TransportTab({ trip }) {
                             <p className="text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Total {roundtrip ? "aller-retour" : ""}</p>
                             <p className="text-3xl font-black text-slate-900 dark:text-white">{formatPrice(total, currency)}</p>
                             <p className="text-xs text-slate-500">pour {passengers} passager{passengers > 1 ? "s" : ""}, taxes et frais inclus</p>
+                            {bagsTotal > 0 && <p className="mt-1 text-xs font-semibold text-indigo-600 dark:text-indigo-300">dont bagages supplémentaires : {formatPrice(bagsTotal, currency)}</p>}
                         </div>
 
                         {currencyMismatch && (

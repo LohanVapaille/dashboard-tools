@@ -18,7 +18,7 @@ class TripMemberController extends Controller
 
         $members = $trip->participants()->with('user:id,name,email')->get()->map(fn($p) => [
             'id' => $p->id,
-            'name' => $p->user->name ?? 'Invité par e-mail',
+            'name' => $p->user->name ?? $p->guest_name ?? ($p->email ? 'Invité par e-mail' : 'Invité'),
             'email' => $p->user->email ?? $p->email,
             'role' => $p->role,
             'status' => $p->status,

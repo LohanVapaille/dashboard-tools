@@ -235,6 +235,73 @@ class FlightBookingFlowTest extends TestCase
         Mail::assertSent(FlightOrderConfirmation::class);
     }
 
+    public function test_paid_baggage_is_priced_with_taxes_and_sent_to_the_airline(): void
+    {
+        Mail::fake();
+        $user = User::factory()->create();
+        $trip = $this->tripFor($user);
+        $offer = $this->offer('off_bag', '100.00') + ['available_services' => [[
+            'id' => 'ase_bag1',
+            'type' => 'baggage',
+            'maximum_quantity' => 2,
+            'passenger_ids' => ['pas_off_bag_1'],
+            'segment_ids' => [],
+            'total_amount' => '30.00',
+            'total_currency' => 'EUR',
+            'metadata' => ['type' => 'checked', 'maximum_weight_kg' => 23],
+        ]]];
+
+        Http::fake([
+            'api.duffel.com/air/offers/off_bag*' => Http::response(['data' => $offer]),
+            'api.stripe.com/v1/checkout/sessions' => Http::response(['id' => 'cs_bag', 'url' => 'https://checkout.stripe.com/pay/cs_bag']),
+            'api.stripe.com/v1/payment_intents/*' => Http::response([]),
+            'api.duffel.com/air/orders' => Http::response(['data' => ['id' => 'ord_bag', 'booking_reference' => 'BAG123']]),
+        ]);
+
+        $this->getJson(route('flights.offers.baggage', 'off_bag'))
+            ->assertOk()
+            ->assertJsonPath('options.0.total_amount', 31.5)
+            ->assertJsonPath('options.0.max_weight_kg', 23);
+
+        $this->actingAs($user)->postJson(route('flights.cart.store'), [
+            'trip_id' => $trip->id,
+            'items' => [['offer_id' => 'off_bag', 'direction' => 'oneway', 'services' => [['id' => 'ase_bag1', 'quantity' => 2]]]],
+        ])->assertOk();
+
+        $this->assertSame('160.00', (string) FlightCartItem::first()->flight_amount);
+
+        $this->actingAs($user)->postJson(route('flights.checkout.store'), [
+            'passengers' => [['title' => 'mr', 'gender' => 'm', 'given_name' => 'Tom', 'family_name' => 'Petit', 'born_on' => '1985-01-01']],
+            'contact_email' => 'tom@example.com',
+            'contact_phone' => '+33612345678',
+            'accept_terms' => true,
+        ])->assertOk();
+
+        $order = FlightOrder::firstOrFail();
+        $this->assertSame('168.00', (string) $order->total_amount);
+
+        app(\App\Services\Flights\FlightOrderProcessor::class)->handlePaidSession($order, [
+            'id' => 'cs_bag', 'payment_status' => 'paid', 'payment_intent' => 'pi_bag',
+        ]);
+
+        Http::assertSent(fn (Request $request) => str_contains($request->url(), '/air/orders')
+            && $request['data']['services'] === [['id' => 'ase_bag1', 'quantity' => 2]]
+            && $request['data']['payments'][0]['amount'] === '160.00');
+        $this->assertSame('ticketed', $order->bookings()->first()->status);
+    }
+
+    public function test_unknown_baggage_is_rejected(): void
+    {
+        $user = User::factory()->create();
+        $trip = $this->tripFor($user);
+        Http::fake(['api.duffel.com/air/offers/*' => Http::response(['data' => $this->offer('off_x')])]);
+
+        $this->actingAs($user)->postJson(route('flights.cart.store'), [
+            'trip_id' => $trip->id,
+            'items' => [['offer_id' => 'off_x', 'direction' => 'oneway', 'services' => [['id' => 'ase_fake', 'quantity' => 1]]]],
+        ])->assertStatus(422)->assertJsonValidationErrors('cart');
+    }
+
     public function test_orders_are_private_to_their_owner(): void
     {
         $owner = User::factory()->create();
