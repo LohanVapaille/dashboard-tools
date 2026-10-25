@@ -3,6 +3,7 @@ import axios from "axios";
 import { Head, Link } from "@inertiajs/react";
 import { ArrowLeft, Bot, CheckCircle2, Headset, Inbox, LoaderCircle, Mail, RotateCcw, Send, UserCheck, Wifi, WifiOff } from "lucide-react";
 import GuestLayout from "@/Layouts/GuestLayout";
+import AdminLayout from "@/Layouts/AdminLayout";
 import { isLive, listen } from "@/Utils/realtime";
 
 const when = (value) => {
@@ -12,8 +13,12 @@ const when = (value) => {
     return today ? date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 };
 
+// Depuis le back-office : même boîte, dans la coque d'administration (défini hors rendu pour garder l'état).
+const BackofficeLayout = ({ children }) => <AdminLayout title="Boîte d’assistance">{children}</AdminLayout>;
+
 /** Boîte de réception de l'assistance : conversations à gauche, échange à droite, en direct. */
-export default function SupportInbox({ conversations: initial, selected: initialSelected }) {
+export default function SupportInbox({ conversations: initial, selected: initialSelected, backoffice }) {
+    const Layout = backoffice ? BackofficeLayout : GuestLayout;
     const [conversations, setConversations] = useState(initial);
     const [filter, setFilter] = useState("open");
     const [selected, setSelected] = useState(initialSelected || null);
@@ -88,9 +93,9 @@ export default function SupportInbox({ conversations: initial, selected: initial
     const openCount = conversations.filter((item) => item.status === "open").length;
 
     return (
-        <GuestLayout>
+        <Layout>
             <Head title="Assistance" />
-            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+            <div className={backoffice ? "" : "mx-auto max-w-7xl px-4 py-6 sm:px-6"}>
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <h1 className="flex items-center gap-2 text-2xl font-black text-slate-900 dark:text-white"><Headset className="h-6 w-6 text-fuchsia-500" /> Assistance <span className="rounded-full bg-fuchsia-100 px-2.5 py-0.5 text-sm text-fuchsia-700 dark:bg-fuchsia-950/50 dark:text-fuchsia-300">{openCount} ouverte{openCount > 1 ? "s" : ""}</span></h1>
                     <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${live ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>
@@ -142,7 +147,7 @@ export default function SupportInbox({ conversations: initial, selected: initial
                                         <p className="flex flex-wrap items-center gap-x-3 text-xs text-slate-500">
                                             {thread.email && <a href={`mailto:${thread.email}`} className="inline-flex items-center gap-1 hover:text-indigo-600"><Mail className="h-3 w-3" /> {thread.email}</a>}
                                             <span className="inline-flex items-center gap-1"><UserCheck className="h-3 w-3" /> {thread.registered ? "Compte" : "Invité"}</span>
-                                            {thread.trip && <Link href={route("trips.show", thread.trip.id)} className="font-semibold text-indigo-600 hover:underline">Voyage : {thread.trip.title}</Link>}
+                                            {thread.trip && <Link href={backoffice ? route("admin.resources.edit", ["trips", thread.trip.id]) : route("trips.show", thread.trip.id)} className="font-semibold text-indigo-600 hover:underline">Voyage : {thread.trip.title}</Link>}
                                         </p>
                                     </div>
                                     {thread.status === "open" ? (
@@ -177,6 +182,6 @@ export default function SupportInbox({ conversations: initial, selected: initial
                     </section>
                 </div>
             </div>
-        </GuestLayout>
+        </Layout>
     );
 }

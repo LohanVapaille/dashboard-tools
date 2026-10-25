@@ -31,6 +31,7 @@ export default function Premium({ isPremium }) {
                         {[
                             "Programmes IA quasi illimités (3 par jour en gratuit)",
                             "Dépenses partagées illimitées (15 par voyage en gratuit)",
+                            "Album photo illimité (5 photos par voyage en gratuit)",
                             "Carnet de voyage imprimable et exportable en PDF",
                             "Avantages partagés avec tous les participants de vos voyages",
                             "Résiliation depuis Stripe à tout moment",

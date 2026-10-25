@@ -29,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'check.trip.access' => CheckTripAccess::class,
             'direct.booking' => \App\Http\Middleware\EnsureDirectBooking::class,
+            'backoffice' => \App\Http\Middleware\EnsureBackofficeAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

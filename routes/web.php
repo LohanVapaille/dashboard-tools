@@ -98,8 +98,6 @@ Route::middleware('auth')->group(function () {
 
     Route::delete('/trips/{trip}/leave', [TripController::class, 'leave'])->name('trips.leave');
     Route::patch('/trips/{trip}/tabs', [TripTabController::class, 'update'])->name('trips.tabs.update');
-    Route::post('/trips/{trip}/photos', [TripPhotoController::class, 'store'])->name('trips.photos.store');
-    Route::delete('/trip-photos/{photo}', [TripPhotoController::class, 'destroy'])->name('trips.photos.destroy');
 
     // Panier et achat de billets d'avion
     Route::get('/panier', [CartController::class, 'index'])->middleware('direct.booking')->name('flights.cart.index');
@@ -187,12 +185,35 @@ Route::prefix('assistance')->name('support.')->group(function () {
     Route::post('/conversation/{conversation}/messages', [App\Http\Controllers\SupportChatController::class, 'send'])->middleware('throttle:30,1')->name('send');
     Route::post('/conversation/{conversation}/close', [App\Http\Controllers\SupportChatController::class, 'close'])->name('close');
 });
-Route::middleware('auth')->prefix('admin/assistance')->name('admin.support.')->group(function () {
+// Accès vérifié dans le contrôleur : agent connecté (SUPPORT_ADMIN_EMAILS) ou session du back-office.
+Route::prefix('admin/assistance')->name('admin.support.')->group(function () {
     Route::get('/', [App\Http\Controllers\Admin\SupportInboxController::class, 'index'])->name('index');
     Route::get('/conversations', [App\Http\Controllers\Admin\SupportInboxController::class, 'conversations'])->name('conversations');
     Route::get('/conversations/{conversation}', [App\Http\Controllers\Admin\SupportInboxController::class, 'show'])->name('show');
     Route::post('/conversations/{conversation}/reply', [App\Http\Controllers\Admin\SupportInboxController::class, 'reply'])->name('reply');
     Route::post('/conversations/{conversation}/status', [App\Http\Controllers\Admin\SupportInboxController::class, 'status'])->name('status');
+});
+
+// Back-office : identifiants ADMIN_USERNAME / ADMIN_PASSWORD du .env, indépendants des comptes du site.
+Route::prefix('admin')->name('admin.')->group(function () {
+    Route::get('/connexion', [App\Http\Controllers\Admin\AuthController::class, 'create'])->name('login');
+    Route::post('/connexion', [App\Http\Controllers\Admin\AuthController::class, 'store'])->middleware('throttle:5,1')->name('login.store');
+    Route::post('/deconnexion', [App\Http\Controllers\Admin\AuthController::class, 'destroy'])->name('logout');
+
+    Route::middleware('backoffice')->group(function () {
+        Route::get('/', App\Http\Controllers\Admin\DashboardController::class)->name('dashboard');
+        Route::controller(App\Http\Controllers\Admin\ResourceController::class)->prefix('{resource}')->name('resources.')
+            ->where(['resource' => '[a-z_]+', 'id' => '[0-9]+'])->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::get('/creer', 'create')->name('create');
+                Route::post('/', 'store')->name('store');
+                Route::get('/recherche', 'lookup')->name('lookup');
+                Route::get('/{id}', 'edit')->name('edit');
+                Route::put('/{id}', 'update')->name('update');
+                Route::delete('/{id}', 'destroy')->name('destroy');
+                Route::patch('/{id}/basculer', 'toggle')->name('toggle');
+            });
+    });
 });
 
 Route::get('/lieux/grandes-villes', [PlaceSuggestionController::class, 'cities'])->middleware('throttle:60,1')->name('places.cities');
@@ -206,6 +227,9 @@ Route::get('/invite/{token}', fn (string $token) => redirect()->route('trips.joi
 Route::resource('trips', TripController::class);
 Route::get('/trips/{trip}/budget', [BudgetController::class, 'show'])->name('trips.budget.show');
 Route::get('/trips/{trip}/carnet', [TripController::class, 'printable'])->name('trips.print');
+// Album : hors du groupe auth pour renvoyer un message clair aux invités (compte requis pour l'envoi).
+Route::post('/trips/{trip}/photos', [TripPhotoController::class, 'store'])->middleware('throttle:60,1')->name('trips.photos.store');
+Route::delete('/trip-photos/{photo}', [TripPhotoController::class, 'destroy'])->name('trips.photos.destroy');
 
 // Édition d'itinéraire — admin/editor/owner uniquement, appliqué une seule fois
 Route::middleware('check.trip.access:edit')->group(function () {

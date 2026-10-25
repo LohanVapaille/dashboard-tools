@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
-import { ChevronLeft, ChevronRight, Download, Image as ImageIcon, ImagePlus, LoaderCircle, Trash2, UploadCloud, X } from "lucide-react";
+import { Link, usePage } from "@inertiajs/react";
+import { ChevronLeft, ChevronRight, Download, Image as ImageIcon, ImagePlus, LoaderCircle, LogIn, Sparkles, Trash2, UploadCloud, X } from "lucide-react";
 import { useTripPermissions } from "@/Contexts/TripPermissionsContext";
 import { confirmDialog } from "@/Components/ConfirmDialog";
 
 const MAX_SIZE = 10 * 1024 * 1024;
+const FREE_PHOTO_LIMIT = 5;
 
 function Lightbox({ photos, index, onClose, onNavigate, onDelete, canEdit }) {
     const photo = photos[index];
@@ -53,6 +55,7 @@ function Lightbox({ photos, index, onClose, onNavigate, onDelete, canEdit }) {
 
 export default function TripPhotos({ trip }) {
     const { canEdit } = useTripPermissions();
+    const signedIn = Boolean(usePage().props.auth?.user);
     const [photos, setPhotos] = useState(trip.photos || []);
     const [caption, setCaption] = useState("");
     const [queue, setQueue] = useState([]);
@@ -70,7 +73,12 @@ export default function TripPhotos({ trip }) {
         setError("");
         const tooBig = files.filter((file) => file.size > MAX_SIZE);
         if (tooBig.length) setError(`${tooBig.length} photo(s) dépassent 10 Mo et n’ont pas été envoyées.`);
-        const accepted = files.filter((file) => file.size <= MAX_SIZE);
+        let accepted = files.filter((file) => file.size <= MAX_SIZE);
+        if (!trip.premium && photos.length + accepted.length > FREE_PHOTO_LIMIT) {
+            accepted = accepted.slice(0, Math.max(0, FREE_PHOTO_LIMIT - photos.length));
+            setError(`La version gratuite permet ${FREE_PHOTO_LIMIT} photos par voyage : ${accepted.length ? `seules ${accepted.length} seront envoyées` : "l’album est plein"}. Passez à Premium pour un album illimité.`);
+            if (!accepted.length) return;
+        }
         setQueue(accepted.map((file) => ({ name: file.name, progress: 0 })));
 
         // Envoi une par une : progression lisible et pas de surcharge du serveur.
@@ -85,6 +93,8 @@ export default function TripPhotos({ trip }) {
                 if (response.data.photo) setPhotos((current) => [response.data.photo, ...current]);
             } catch (uploadError) {
                 setError(uploadError.response?.data?.message || `Impossible d’ajouter « ${file.name} ».`);
+                // Compte requis ou limite atteinte : inutile d'envoyer les suivantes.
+                if ([401, 403].includes(uploadError.response?.status)) break;
             }
         }
         setQueue([]);
@@ -107,6 +117,8 @@ export default function TripPhotos({ trip }) {
     const navigate = useCallback((step) => setViewing((current) => (current === null ? null : (current + step + photos.length) % photos.length)), [photos.length]);
     const close = useCallback(() => setViewing(null), []);
     const uploading = queue.length > 0;
+    const canUpload = canEdit && signedIn;
+    const albumFull = !trip.premium && photos.length >= FREE_PHOTO_LIMIT;
 
     return (
         <div className="space-y-6">
@@ -121,8 +133,8 @@ export default function TripPhotos({ trip }) {
                             {photos.length ? `${photos.length} souvenir${photos.length > 1 ? "s" : ""} partagé${photos.length > 1 ? "s" : ""} avec les membres du voyage.` : "Partagez vos plus beaux moments avec les autres voyageurs."}
                         </p>
                     </div>
-                    {canEdit && (
-                        <button type="button" onClick={() => fileInput.current?.click()} disabled={uploading} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-rose-600 shadow-lg hover:bg-rose-50 disabled:opacity-60">
+                    {canUpload && (
+                        <button type="button" onClick={() => fileInput.current?.click()} disabled={uploading || albumFull} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-rose-600 shadow-lg hover:bg-rose-50 disabled:opacity-60">
                             <ImagePlus className="h-4 w-4" /> Ajouter des photos
                         </button>
                     )}
@@ -131,7 +143,28 @@ export default function TripPhotos({ trip }) {
 
             {error && <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-950/30 dark:text-rose-300">{error}</p>}
 
-            {canEdit && (
+            {canEdit && !signedIn && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border-2 border-dashed border-rose-200 bg-white p-6 dark:border-rose-900/50 dark:bg-slate-800">
+                    <div>
+                        <p className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100"><LogIn className="h-4 w-4 text-rose-500" /> Un compte est nécessaire pour ajouter des photos</p>
+                        <p className="mt-1 text-xs text-slate-500">Connectez-vous ou créez un compte gratuit : vos voyages actuels sont conservés.</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <Link href={route("login")} className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-100">Se connecter</Link>
+                        <Link href={route("register")} className="rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-rose-700">Créer un compte</Link>
+                    </div>
+                </div>
+            )}
+
+            {canUpload && !trip.premium && (
+                <p className={`flex flex-wrap items-center gap-x-2 rounded-xl px-4 py-2.5 text-xs ${albumFull ? "bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200" : "bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300"}`}>
+                    <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                    {Math.min(photos.length, FREE_PHOTO_LIMIT)} / {FREE_PHOTO_LIMIT} photos de la version gratuite.
+                    <a href={route("billing.show")} className="font-bold underline">Passer à Premium</a> pour un album illimité.
+                </p>
+            )}
+
+            {canUpload && !albumFull && (
                 <div
                     onDragOver={(event) => {
                         event.preventDefault();

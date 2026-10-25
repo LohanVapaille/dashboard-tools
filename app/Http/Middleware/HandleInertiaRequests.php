@@ -37,6 +37,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'flash' => [
                 'status' => fn () => $request->session()->get('status'),
+                'error' => fn () => $request->session()->get('error'),
             ],
             'legal' => fn () => [
                 'company' => config('legal.company'),

@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Admin\AdminResources;
 use App\Events\SupportMessagePosted;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\SupportChatController;
+use App\Http\Middleware\EnsureBackofficeAdmin;
 use App\Models\SupportConversation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -15,12 +17,21 @@ class SupportInboxController extends Controller
 {
     public function index(Request $request)
     {
+        if (!$request->user() && !EnsureBackofficeAdmin::check($request)) {
+            return redirect()->guest(route('admin.login'));
+        }
         $this->authorizeAgent($request);
+
+        $backoffice = EnsureBackofficeAdmin::check($request);
+        if ($backoffice) {
+            Inertia::share('admin', fn () => ['nav' => AdminResources::nav()]);
+        }
 
         return Inertia::render('Admin/Support', [
             'conversations' => $this->list(),
             'selected' => $request->query('c'),
             'topics' => SupportConversation::TOPICS,
+            'backoffice' => $backoffice,
         ]);
     }
 
@@ -45,7 +56,7 @@ class SupportInboxController extends Controller
         $body = $request->validate(['message' => ['required', 'string', 'min:1', 'max:4000']])['message'];
 
         $conversation->update(['status' => 'open', 'agent_read_at' => now()]);
-        $message = SupportChatController::post($conversation, 'agent', $request->user()->name, $body);
+        $message = SupportChatController::post($conversation, 'agent', $request->user()?->name ?? config('admin.agent_name'), $body);
 
         // Le client n'est peut-être plus sur le site : copie de la réponse par e-mail.
         if ($conversation->email) {
@@ -88,6 +99,7 @@ class SupportInboxController extends Controller
 
     private function authorizeAgent(Request $request): void
     {
-        abort_unless($request->user()?->isSupportAgent(), 403);
+        // Agents identifiés par e-mail (SUPPORT_ADMIN_EMAILS) ou session du back-office.
+        abort_unless($request->user()?->isSupportAgent() || EnsureBackofficeAdmin::check($request), 403);
     }
 }

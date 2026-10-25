@@ -85,6 +85,7 @@ class Trip extends Model
     }
 
     public const FREE_EXPENSE_LIMIT = 15;
+    public const FREE_PHOTO_LIMIT = 5;
 
     /** Fonctions Premium du voyage : actives si l'organisateur ou la personne connectée est abonné. */
     public function hasPremium($viewer = null): bool
