@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
 import { Head, Link, router, useForm, usePage } from "@inertiajs/react";
-import { BadgeCheck, Camera, Compass, KeyRound, LoaderCircle, LogOut, Mail, ShoppingCart, Sparkles, Ticket, Trash2, User, Users } from "lucide-react";
+import { BadgeCheck, Camera, Compass, Heart, KeyRound, LoaderCircle, LogOut, Luggage, Mail, ShoppingCart, Sparkles, Ticket, Trash2, User, Users } from "lucide-react";
 import GuestLayout from "@/Layouts/GuestLayout";
+import PublicTripCard from "@/Components/Trips/PublicTripCard";
+import DuplicateTripModal from "@/Components/Trips/DuplicateTripModal";
 
 const inputClass = "mt-1.5 w-full rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-800 focus:border-indigo-500 focus:bg-white focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100";
 
@@ -22,8 +24,49 @@ const Card = ({ icon: Icon, title, description, children, tone = "indigo" }) => 
 
 const FieldError = ({ message }) => (message ? <p className="mt-1 text-xs font-medium text-rose-600">{message}</p> : null);
 
-export default function ProfileEdit({ stats }) {
+function FavoritesTab({ favorites, setFavorites }) {
+    const [duplicating, setDuplicating] = useState(null);
+
+    if (!favorites.length) {
+        return (
+            <div className="rounded-3xl border-2 border-dashed border-slate-300 bg-white p-12 text-center dark:border-slate-700 dark:bg-slate-800">
+                <Heart className="mx-auto h-10 w-10 text-rose-300" />
+                <p className="mt-3 font-black text-slate-800 dark:text-white">Aucun favori pour le moment</p>
+                <p className="mt-1 text-sm text-slate-500">Touchez le cœur d’un voyage sur la page Parcourir pour le retrouver ici.</p>
+                <Link href={route("explore.index")} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">
+                    <Compass className="h-4 w-4" /> Parcourir les voyages
+                </Link>
+            </div>
+        );
+    }
+
+    return (
+        <>
+            {duplicating && <DuplicateTripModal trip={duplicating} days={duplicating.days} onClose={() => setDuplicating(null)} />}
+            <div className="grid items-start gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {favorites.map((trip) => (
+                    <PublicTripCard
+                        key={trip.id}
+                        trip={trip}
+                        onDuplicate={setDuplicating}
+                        // Retiré des favoris : la carte quitte la liste.
+                        onFavoriteChange={(item, favorited) => !favorited && setFavorites((list) => list.filter((entry) => entry.id !== item.id))}
+                    />
+                ))}
+            </div>
+        </>
+    );
+}
+
+export default function ProfileEdit({ stats, tab: initialTab = "account", favorites = [] }) {
     const { auth, flash, errors, commerce } = usePage().props;
+    const [tab, setTab] = useState(initialTab);
+    const [favoriteList, setFavoriteList] = useState(favorites);
+    const switchTab = (next) => {
+        setTab(next);
+        // Lien partageable vers l'onglet (/profile?onglet=favoris), sans recharger la page.
+        window.history.replaceState(window.history.state, "", next === "favorites" ? `${route("profile.edit")}?onglet=favoris` : route("profile.edit"));
+    };
     const user = auth.user;
     const fileInput = useRef(null);
     const [preview, setPreview] = useState(null);
@@ -132,13 +175,29 @@ export default function ProfileEdit({ stats }) {
                     </div>
                 </div>
 
+                <div className="mt-6 flex gap-1 rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700 sm:inline-flex">
+                    {[["account", User, "Mon compte", null], ["favorites", Heart, "Favoris", favoriteList.length]].map(([key, Icon, label, count]) => (
+                        <button
+                            key={key}
+                            type="button"
+                            onClick={() => switchTab(key)}
+                            className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition sm:flex-none ${tab === key ? "bg-slate-900 text-white shadow dark:bg-white dark:text-slate-900" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"}`}
+                        >
+                            <Icon className={`h-4 w-4 ${key === "favorites" && tab !== key ? "text-rose-500" : ""}`} /> {label}
+                            {count > 0 && <span className={`rounded-full px-2 text-[11px] ${tab === key ? "bg-white/20" : "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"}`}>{count}</span>}
+                        </button>
+                    ))}
+                </div>
+
                 {flash?.status && (
                     <p className="mt-6 flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">
                         <BadgeCheck className="h-4 w-4" /> {flash.status}
                     </p>
                 )}
 
-                <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_18rem]">
+                {tab === "favorites" && <div className="mt-6"><FavoritesTab favorites={favoriteList} setFavorites={setFavoriteList} /></div>}
+
+                <div className={`mt-6 grid gap-6 lg:grid-cols-[1fr_18rem] ${tab === "account" ? "" : "hidden"}`}>
                     <div className="space-y-6">
                         <Card icon={User} title="Informations personnelles" description="Votre nom apparaît auprès des membres de vos voyages.">
                             <form onSubmit={(event) => { event.preventDefault(); profile.patch(route("profile.update"), { preserveScroll: true }); }} className="grid gap-4 sm:grid-cols-2">
@@ -200,7 +259,8 @@ export default function ProfileEdit({ stats }) {
 
                     <aside className="space-y-3">
                         {[
-                            [Compass, "Mes voyages", route("trips.index"), "from-sky-500 to-indigo-500"],
+                            [Luggage, "Mes voyages", route("trips.index"), "from-sky-500 to-indigo-500"],
+                            [Compass, "Parcourir les voyages", route("explore.index"), "from-emerald-500 to-sky-500"],
                             [Ticket, "Mes réservations", route("flights.orders.index"), "from-emerald-500 to-teal-500"],
                             // Panier uniquement en vente directe : en mode partenaires, tout s'achète chez eux.
                             commerce?.direct_booking && [ShoppingCart, "Mon panier", route("flights.cart.index"), "from-violet-500 to-fuchsia-500"],

@@ -11,7 +11,7 @@ import { useAffiliateLinks } from "@/Utils/affiliate";
 import { formatDay, nightsBetween } from "@/Utils/stays";
 import TravelEssentials from "@/Components/Trips/TravelEssentials";
 
-export default function ProgramTab({ trip, canEdit, onOpenAI, onOpenAddStay, onEditStay }) {
+export default function ProgramTab({ trip, canEdit, onOpenAI, onOpenAddStay, onEditStay, readOnly = false }) {
     useAffiliateLinks();
     const stays = trip.stays || [];
     const days = stays.reduce((sum, stay) => sum + (stay.days?.length || 0), 0);
@@ -48,10 +48,10 @@ export default function ProgramTab({ trip, canEdit, onOpenAI, onOpenAddStay, onE
                 <div className="pointer-events-none absolute -bottom-20 left-10 h-48 w-48 rounded-full bg-fuchsia-300/20 blur-2xl" />
                 <div className="relative flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <h2 className="flex items-center gap-2 text-2xl font-black"><CalendarDays className="h-6 w-6" /> Votre programme</h2>
-                        <p className="mt-1 text-sm text-violet-100">Organisez chaque journée : activités, horaires, repas et bons plans, étape par étape.</p>
+                        <h2 className="flex items-center gap-2 text-2xl font-black"><CalendarDays className="h-6 w-6" /> {readOnly ? "Le programme" : "Votre programme"}</h2>
+                        <p className="mt-1 text-sm text-violet-100">{readOnly ? "Activités, horaires et bons plans de ce voyage, étape par étape." : "Organisez chaque journée : activités, horaires, repas et bons plans, étape par étape."}</p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className={`flex flex-wrap gap-2 ${readOnly ? "hidden" : ""}`}>
                         <button
                             onClick={onOpenAI}
                             disabled={!canEdit}

@@ -224,6 +224,15 @@ Route::post('/rejoindre/{token}', [TripInviteController::class, 'join'])->middle
 Route::get('/trips/join/{token}', fn (string $token) => redirect()->route('trips.join', $token));
 Route::get('/invite/{token}', fn (string $token) => redirect()->route('trips.join', $token))->name('trips.invite.show');
 
+// Voyages publiés par la communauté : grille, lecture seule (trips.show) et reprise à ses dates.
+Route::get('/parcourir', [App\Http\Controllers\ExploreController::class, 'index'])->name('explore.index');
+Route::post('/parcourir/{trip}/favori', [App\Http\Controllers\TripFavoriteController::class, 'toggle'])->middleware('throttle:60,1')->name('explore.favorite');
+Route::post('/parcourir/{trip}/reprendre', [App\Http\Controllers\ExploreController::class, 'duplicate'])->middleware('throttle:10,1')->name('explore.duplicate');
+Route::post('/trips/{trip}/publication', [App\Http\Controllers\TripPublicationController::class, 'store'])->middleware('throttle:20,1')->name('trips.publication.store');
+Route::delete('/trips/{trip}/publication', [App\Http\Controllers\TripPublicationController::class, 'destroy'])->name('trips.publication.destroy');
+Route::post('/trips/{trip}/publication/couverture', [App\Http\Controllers\TripPublicationController::class, 'storeCover'])->middleware('throttle:10,1')->name('trips.publication.cover');
+Route::delete('/trips/{trip}/publication/couverture', [App\Http\Controllers\TripPublicationController::class, 'destroyCover'])->name('trips.publication.cover.destroy');
+
 Route::resource('trips', TripController::class);
 Route::get('/trips/{trip}/budget', [BudgetController::class, 'show'])->name('trips.budget.show');
 Route::get('/trips/{trip}/carnet', [TripController::class, 'printable'])->name('trips.print');

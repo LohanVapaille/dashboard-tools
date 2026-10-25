@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Head, Link, router, usePage } from "@inertiajs/react";
-import { Compass, Headset, LayoutDashboard, LogOut, Menu, X } from "lucide-react";
+import { Headset, LayoutDashboard, LogOut, Menu, X } from "lucide-react";
+import BrandMark from "@/Components/BrandMark";
 import AdminIcon from "@/Components/Admin/AdminIcon";
 import ConfirmHost from "@/Components/ConfirmDialog";
 
@@ -38,7 +39,7 @@ export default function AdminLayout({ title, actions, children }) {
     const sidebar = (
         <nav className="flex h-full flex-col gap-5 overflow-y-auto px-3 py-5">
             <Link href={route("admin.dashboard")} className="flex items-center gap-2 px-3 text-lg font-bold text-white">
-                <span className="rounded-lg bg-gradient-to-br from-sky-400 via-indigo-500 to-violet-600 p-1.5"><Compass className="h-4 w-4" /></span>
+                <BrandMark className="h-7 w-7" />
                 Back-office
             </Link>
             <div className="space-y-0.5">

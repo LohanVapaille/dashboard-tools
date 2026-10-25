@@ -7,6 +7,7 @@ use App\Models\FlightOrder;
 use App\Models\StayOrder;
 use App\Models\TripParticipant;
 use App\Services\AvatarProcessor;
+use App\Services\Trips\TripPublication;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,8 +26,16 @@ class ProfileController extends Controller
     public function edit(Request $request): Response
     {
         $user = $request->user();
+        $publication = app(TripPublication::class);
+        // Onglet « Favoris » : voyages encore publiés, du plus récemment ajouté au plus ancien.
+        $favorites = $user->favoriteTrips()->published()
+            ->with('user:id,name,avatar')->withCount('copies')
+            ->orderByPivot('created_at', 'desc')->get();
+        $favoriteIds = $favorites->pluck('id')->map(fn ($id) => (int) $id)->all();
 
         return Inertia::render('Profile/Edit', [
+            'tab' => $request->query('onglet') === 'favoris' ? 'favorites' : 'account',
+            'favorites' => $favorites->map(fn ($trip) => $publication->card($trip, $favoriteIds))->values(),
             'mustVerifyEmail' => $user instanceof MustVerifyEmail,
             'status' => session('status'),
             'stats' => [

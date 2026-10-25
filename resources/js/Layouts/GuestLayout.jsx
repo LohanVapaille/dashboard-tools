@@ -1,6 +1,7 @@
 import React from "react";
 import { Link, usePage } from "@inertiajs/react";
-import { Compass, Headset, LogIn, ShoppingCart, Ticket, User as UserIcon } from "lucide-react";
+import { Compass, Headset, LogIn, Luggage, ShoppingCart, Ticket, User as UserIcon } from "lucide-react";
+import BrandMark from "@/Components/BrandMark";
 import CookieConsent from "@/Components/CookieConsent";
 import ConfirmHost from "@/Components/ConfirmDialog";
 import SupportWidget from "@/Components/Support/SupportWidget";
@@ -23,9 +24,7 @@ export default function GuestLayout({ children }) {
                         href={route("trips.index")}
                         className="flex items-center gap-2 font-bold text-lg tracking-tight"
                     >
-                        <div className="p-1.5 bg-gradient-to-br from-sky-400 via-indigo-500 to-violet-600 rounded-lg shadow-lg shadow-indigo-500/30">
-                            <Compass className="w-5 h-5 text-white" />
-                        </div>
+                        <BrandMark />
                         <span>
                             Lova<span className="bg-gradient-to-r from-sky-300 to-violet-300 bg-clip-text text-transparent">Trip</span>
                         </span>
@@ -48,9 +47,17 @@ export default function GuestLayout({ children }) {
                             </Link>
                         )}
                         <Link
-                            href={route("trips.index")}
-                            className="hidden sm:inline text-xs font-semibold text-slate-300 hover:text-white transition"
+                            href={route("explore.index")}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white transition"
                         >
+                            <Compass className="w-3.5 h-3.5 text-emerald-300" />
+                            Parcourir
+                        </Link>
+                        <Link
+                            href={route("trips.index")}
+                            className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white transition"
+                        >
+                            <Luggage className="w-3.5 h-3.5 text-amber-300" />
                             Mes voyages
                         </Link>
 

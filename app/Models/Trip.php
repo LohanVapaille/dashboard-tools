@@ -30,7 +30,40 @@ class Trip extends Model
         'origin_longitude' => 'float',
         'travelers' => 'integer',
         'budget_target' => 'decimal:2',
+        'published_at' => 'datetime',
+        'published_budget' => 'decimal:2',
+        'published_summary' => 'array',
     ];
+
+    public function isPublished(): bool
+    {
+        return $this->published_at !== null;
+    }
+
+    /** Image d'aperçu de la page « Parcourir » (chemin du disque public ou URL absolue). */
+    public function coverUrl(): ?string
+    {
+        if (!$this->cover_image) {
+            return null;
+        }
+
+        return Str::startsWith($this->cover_image, ['http://', 'https://', '/']) ? $this->cover_image : '/storage/' . $this->cover_image;
+    }
+
+    public function scopePublished($query)
+    {
+        return $query->whereNotNull('published_at');
+    }
+
+    public function favoritedBy()
+    {
+        return $this->belongsToMany(User::class, 'trip_favorites')->withTimestamps();
+    }
+
+    public function copies()
+    {
+        return $this->hasMany(Trip::class, 'copied_from_id');
+    }
 
     public function user()
     {

@@ -17,8 +17,11 @@ import {
     Bus,
     Calendar,
     ChevronRight,
+    Copy,
     Edit3,
+    Eye,
     Flag,
+    Globe,
     Home,
     Hourglass,
     Image,
@@ -41,6 +44,10 @@ import DateRangePicker from "@/Components/DateRangePicker";
 import { notify } from "@/Components/ConfirmDialog";
 import ShareTripModal from "@/Components/Trips/ShareTripModal";
 import TripSettingsModal from "@/Components/Trips/TripSettingsModal";
+import PublishTripModal from "@/Components/Trips/PublishTripModal";
+import DuplicateTripModal from "@/Components/Trips/DuplicateTripModal";
+import PublicBudget from "@/Components/Trips/PublicBudget";
+import FavoriteButton from "@/Components/Trips/FavoriteButton";
 
 const dayNumber = (date) => {
     const [year, month, day] = date.split("-").map(Number);
@@ -61,9 +68,12 @@ function tripStatus(start, end) {
 }
 
 function ShowContent({ trip }) {
-    const { canEdit, canViewShareLink } = useTripPermissions();
+    const { canEdit, canViewShareLink, isOwner, isPublicView } = useTripPermissions();
 
     const { props } = usePage();
+    const [isPublishOpen, setIsPublishOpen] = useState(false);
+    const [isDuplicateOpen, setIsDuplicateOpen] = useState(false);
+    const publication = trip.publication;
     const authenticated = Boolean(props.auth?.user);
     const [guestWarning, setGuestWarning] = useState(
         props.guestWarning ?? null,
@@ -72,8 +82,9 @@ function ShowContent({ trip }) {
     const [isAddingStay, setIsAddingStay] = useState(false);
     const [isAIItineraryOpen, setIsAIItineraryOpen] = useState(false);
     const defaultTabs = ["program", "transport", "stays", "budget", "photos"];
+    // Visiteur d'un voyage publié : programme et budget agrégé uniquement (le reste est privé ou réservé aux membres).
     const [visibleTabs, setVisibleTabs] = useState(
-        trip.visible_tabs?.length ? trip.visible_tabs : defaultTabs,
+        isPublicView ? ["program", "budget"] : trip.visible_tabs?.length ? trip.visible_tabs : defaultTabs,
     );
     const [activeTab, setActiveTab] = useState("program");
     const [settingsSection, setSettingsSection] = useState(null);
@@ -195,10 +206,10 @@ function ShowContent({ trip }) {
                         <div className="pointer-events-none absolute -bottom-24 left-1/4 h-64 w-64 rounded-full bg-sky-300/20 blur-3xl" />
 
                         <div className="relative flex flex-wrap items-center justify-between gap-3">
-                            <Link href={route("trips.index")} className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold backdrop-blur transition hover:bg-white/25">
-                                <ArrowLeft className="h-3.5 w-3.5" /> Mes voyages
+                            <Link href={route(isPublicView ? "explore.index" : "trips.index")} className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold backdrop-blur transition hover:bg-white/25">
+                                <ArrowLeft className="h-3.5 w-3.5" /> {isPublicView ? "Parcourir" : "Mes voyages"}
                             </Link>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
                                 {trip.avatars?.length > 0 && (
                                     <button type="button" onClick={() => canViewShareLink && setIsShareOpen(true)} className="mr-1 rounded-full" title="Participants">
                                         <AvatarStack people={trip.avatars} />
@@ -207,6 +218,17 @@ function ShowContent({ trip }) {
                                 {canViewShareLink && (
                                     <button onClick={() => setIsShareOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-lg transition hover:bg-indigo-50">
                                         <UserPlus className="h-4 w-4" /> Partager
+                                    </button>
+                                )}
+                                {isOwner && (
+                                    <button onClick={() => setIsPublishOpen(true)} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold shadow-lg transition ${publication ? "bg-emerald-400 text-emerald-950 hover:bg-emerald-300" : "bg-white/15 text-white backdrop-blur hover:bg-white/25"}`}>
+                                        <Globe className="h-4 w-4" /> {publication ? "Publié sur le site" : "Publier sur le site"}
+                                    </button>
+                                )}
+                                {publication && !isOwner && <FavoriteButton tripId={trip.id} favorited={publication.favorited} variant="solid" />}
+                                {publication && !isOwner && (
+                                    <button onClick={() => setIsDuplicateOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-lg transition hover:bg-indigo-50">
+                                        <Copy className="h-4 w-4" /> Reprendre ce voyage
                                     </button>
                                 )}
                                 {canEdit && (
@@ -222,6 +244,17 @@ function ShowContent({ trip }) {
                             {trip.description && <p className="mt-2 max-w-2xl text-sm text-indigo-100">{trip.description}</p>}
 
                             <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
+                                {publication && (
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 backdrop-blur">
+                                        {publication.author.avatar ? <img src={publication.author.avatar} alt="" className="h-4 w-4 rounded-full object-cover" /> : <Globe className="h-3.5 w-3.5" />}
+                                        Par {publication.author.name}
+                                    </span>
+                                )}
+                                {isPublicView && (
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 backdrop-blur">
+                                        <Eye className="h-3.5 w-3.5" /> Lecture seule · {publication.days} jour{publication.days > 1 ? "s" : ""}
+                                    </span>
+                                )}
                                 {trip.start_date && (
                                     <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 backdrop-blur">
                                         <Calendar className="h-3.5 w-3.5" /> {formatDate(trip.start_date)} → {formatDate(trip.end_date)}
@@ -253,7 +286,11 @@ function ShowContent({ trip }) {
                         </div>
                     </section>
 
-                    <TripNotes trip={trip} />
+                    {props.flash?.status && (
+                        <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">{props.flash.status}</p>
+                    )}
+
+                    {!isPublicView && <TripNotes trip={trip} />}
 
                     <div className="bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
                         <TripMap stays={trip.stays || []} />
@@ -290,6 +327,7 @@ function ShowContent({ trip }) {
                             onOpenAI={() => setIsAIItineraryOpen(true)}
                             onOpenAddStay={handleOpenAddStay}
                             onEditStay={handleOpenEditStay}
+                            readOnly={isPublicView}
                         />
                     )}
 
@@ -297,7 +335,13 @@ function ShowContent({ trip }) {
 
                     {activeTab === "stays" && <StaysTab trip={trip} />}
 
-                    {activeTab === "budget" && <BudgetTab trip={trip} canEdit={canEdit} />}
+                    {activeTab === "budget" && (isPublicView ? (
+                        <section className="max-w-2xl rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
+                            <PublicBudget budget={publication?.budget} travelers={trip.travelers} />
+                        </section>
+                    ) : (
+                        <BudgetTab trip={trip} canEdit={canEdit} />
+                    ))}
 
                     {activeTab === "photos" && <PhotosTab trip={trip} />}
 
@@ -315,6 +359,8 @@ function ShowContent({ trip }) {
                 )}
 
                 {isShareOpen && canViewShareLink && <ShareTripModal trip={trip} onClose={() => setIsShareOpen(false)} />}
+                {isPublishOpen && isOwner && <PublishTripModal trip={trip} onClose={() => setIsPublishOpen(false)} />}
+                {isDuplicateOpen && publication && <DuplicateTripModal trip={trip} days={publication.days} onClose={() => setIsDuplicateOpen(false)} />}
 
                 {editingStay && canEdit && (
                     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">

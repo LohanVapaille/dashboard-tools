@@ -30,6 +30,7 @@ class AdminResources
         'flight_order_id' => 'flight_orders',
         'stay_order_id' => 'stay_orders',
         'support_conversation_id' => 'support_conversations',
+        'copied_from_id' => 'trips',
     ];
 
     private const LABELS = [

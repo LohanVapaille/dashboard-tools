@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use App\Models\Trip;
 use App\Models\TripParticipant;
+use App\Services\Trips\TripPublication;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -53,10 +54,20 @@ class TripController extends Controller
             return $trip;
         });
 
+        // Aperçu de la page « Parcourir » : derniers voyages publiés par d'autres voyageurs.
+        $publication = app(TripPublication::class);
+        $favorites = TripPublication::favoriteIds($user);
+        $community = Trip::published()
+            ->with('user:id,name,avatar')->withCount('copies')
+            ->when($user, fn ($query) => $query->where(fn ($q) => $q->where('user_id', '!=', $user->id)->orWhereNull('user_id')))
+            ->latest('published_at')->limit(3)->get()
+            ->map(fn (Trip $trip) => $publication->card($trip, $favorites));
+
         return Inertia::render('Trips/Index', [
             'ownedTrips' => $owned,
             'joinedTrips' => $joined,
             'guestTripsRemaining' => $user ? null : max(0, self::GUEST_TRIP_LIMIT - self::guestTripCount($guestToken)),
+            'community' => ['trips' => $community, 'total' => Trip::published()->count()],
         ]);
     }
 
@@ -127,14 +138,19 @@ class TripController extends Controller
         return $redirect;
     }
 
-    public function show(Trip $trip)
+    public function show(Trip $trip, TripPublication $publication)
     {
-        $this->authorize('view', $trip);
-
         $user = Auth::user();
         $guestToken = request()->cookie('guest_token');
 
-        $trip->load(['stays.days.activities', 'stays.days.blocks', 'transitions', 'notes', 'photos', 'reservations', 'participants.user:id,name']);
+        // Voyage publié : lisible par tous, mais seulement en lecture seule et sans données personnelles.
+        // La policy « view » reste réservée aux membres (budget détaillé, carnet, photos, recherches…).
+        $public = !$trip->canView($user, $guestToken) && $trip->isPublished();
+        if (!$public) {
+            $this->authorize('view', $trip);
+        }
+
+        $trip->load(['stays.days.activities', 'stays.days.blocks', 'transitions', 'notes', 'photos', 'reservations', 'participants.user:id,name', 'user:id,name,avatar']);
 
         $trip->permissions = [
             'isOwner' => $trip->isOwner($user, $guestToken),
@@ -143,9 +159,25 @@ class TripController extends Controller
             'canViewShareLink' => $trip->canViewShareLink($user, $guestToken),
             'canManageAccess' => $trip->canManageAccess($user, $guestToken),
             'canManageRoles' => $trip->canManageRoles($user, $guestToken),
+            'isPublicView' => $public,
         ];
 
-        $trip->premium = $trip->hasPremium($user);
+        $trip->premium = !$public && $trip->hasPremium($user);
+        $trip->publication = $trip->isPublished() ? [
+            'published_at' => $trip->published_at->toIso8601String(),
+            'days' => TripPublication::days($trip),
+            'cover' => $trip->coverUrl(),
+            'author' => ['name' => TripPublication::authorName($trip), 'avatar' => $trip->user?->avatar],
+            'budget' => $trip->published_summary['budget'] ?? null,
+            'copies' => $trip->copies()->count(),
+            'favorited' => $user ? $user->favoriteTrips()->whereKey($trip->id)->exists() : false,
+        ] : null;
+        $trip->setRelation('user', null);
+        $trip->makeHidden(['published_summary']);
+
+        if ($public) {
+            $publication->scrubForPublic($trip);
+        }
 
         // Pays de chaque étape : suggestions eSIM, location de voiture… adaptées à la destination.
         $places = app(\App\Services\Places\MajorCities::class);
@@ -198,6 +230,11 @@ class TripController extends Controller
         ]);
 
         $trip->update($validated);
+
+        // Durée ou voyageurs changés : l'aperçu public (filtres jours / budget) suit.
+        if ($trip->isPublished()) {
+            rescue(fn () => app(TripPublication::class)->publish($trip->fresh()), report: true);
+        }
 
         return back();
     }

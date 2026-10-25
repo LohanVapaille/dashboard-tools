@@ -1,5 +1,6 @@
 import { Head, useForm } from "@inertiajs/react";
 import { Lock, LoaderCircle, ShieldCheck } from "lucide-react";
+import BrandMark from "@/Components/BrandMark";
 
 export default function AdminLogin({ configured }) {
     const form = useForm({ username: "", password: "" });
@@ -14,7 +15,10 @@ export default function AdminLogin({ configured }) {
             <Head title="Connexion · Back-office" />
             <form onSubmit={submit} className="w-full max-w-sm space-y-5 rounded-3xl bg-white p-8 shadow-2xl dark:bg-slate-900">
                 <div className="text-center">
-                    <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 via-indigo-500 to-violet-600 text-white"><ShieldCheck className="h-6 w-6" /></span>
+                    <span className="relative mx-auto block h-12 w-12">
+                        <BrandMark className="h-12 w-12" />
+                        <ShieldCheck className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-white p-0.5 text-indigo-600" />
+                    </span>
                     <h1 className="mt-3 text-xl font-black text-slate-900 dark:text-white">Back-office</h1>
                     <p className="text-sm text-slate-500">Accès réservé à l’administration du site.</p>
                 </div>

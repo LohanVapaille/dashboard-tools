@@ -68,6 +68,12 @@ class User extends Authenticatable
             && (!$this->subscription_ends_at || $this->subscription_ends_at->isFuture());
     }
 
+    /** Voyages publiés mis en favoris (page « Parcourir »). */
+    public function favoriteTrips()
+    {
+        return $this->belongsToMany(Trip::class, 'trip_favorites')->withTimestamps();
+    }
+
     public function trips()
     {
         return $this->hasMany(Trip::class); // ou belongsToMany selon ta structure de base de données
