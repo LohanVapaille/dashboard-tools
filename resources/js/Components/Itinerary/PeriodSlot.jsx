@@ -1,196 +1,83 @@
-import React, { useState } from "react";
-import axios from "axios";
-import { Plus } from "lucide-react";
+import { useState } from "react";
 import { Droppable, Draggable } from "@hello-pangea/dnd";
-import DynamicIcon from "./DynamicIcon";
+import { EyeOff, Plus } from "lucide-react";
 import ActivityItem from "./ActivityItem";
+import ActivityForm from "./ActivityForm";
+import ActivitySheet from "./ActivitySheet";
+import { droppableIdFor } from "./ActivityBoard";
+import { periodStyle } from "./activityMeta";
 import { useTripPermissions } from "@/Contexts/TripPermissionsContext";
 
-const PERIOD_LABELS = {
-    matin: "Matin",
-    midi: "Midi",
-    apres_midi: "Après-midi",
-    soir: "Soir",
-    nuit: "Nuit",
-};
-
-export default function PeriodSlot({
-    periodKey,
-    dayId,
-    activities = [],
-    onActivityAdded,
-    onActivityDeleted,
-}) {
-    const [isAdding, setIsAdding] = useState(false);
-    const [title, setTitle] = useState("");
-    const [category, setCategory] = useState("autre");
-    const [price, setPrice] = useState("");
-    const [description, setDescription] = useState("");
-    const [locationName, setLocationName] = useState("");
-    const [sourceUrl, setSourceUrl] = useState("");
-
-    const filteredActivities = activities.filter((a) => a.period === periodKey);
-
-    const handleAdd = (e) => {
-        e.preventDefault();
-        axios
-            .post(route("activities.store", dayId), {
-                title,
-                period: periodKey,
-                category,
-                price: price || 0,
-                description,
-                location_name: locationName,
-                source_url: sourceUrl || null,
-            })
-            .then((response) => {
-                if (onActivityAdded) onActivityAdded(response.data);
-                setIsAdding(false);
-                setTitle("");
-                setPrice("");
-                setDescription("");
-                setLocationName("");
-                setSourceUrl("");
-            })
-            .catch((error) => {
-                console.error("Erreur lors de l'ajout :", error);
-            });
-    };
-
+/** Un moment de la journée : libellé à gauche, activités (glisser-déposer) à droite. */
+export default function PeriodSlot({ periodKey, dayId, activities = [], onActivityAdded, onActivityDeleted, onActivityUpdated, onHide }) {
     const { canEdit } = useTripPermissions();
+    const [adding, setAdding] = useState(false);
+    const period = periodStyle(periodKey);
+    const items = activities.filter((activity) => activity.period === periodKey);
 
     return (
-        <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-2 h-full flex flex-col">
-            {/* En-tête (Titre du moment) - Hors de la zone de drop, reste fixe */}
-            <div className="flex items-center justify-between pb-1 border-b border-slate-200 dark:border-slate-800">
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    <DynamicIcon
-                        name={periodKey}
-                        className="w-4 h-4 text-amber-500"
-                    />
-                    {PERIOD_LABELS[periodKey]}
-                </div>
-                <button
-                    onClick={() => canEdit && setIsAdding(!isAdding)}
-                    disabled={!canEdit}
-                    className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-300"
-                >
-                    <Plus className="w-4 h-4" />
-                </button>
+        <div className="group/period grid gap-2 sm:grid-cols-[7.5rem_1fr] sm:gap-4">
+            <div className="flex items-center justify-between sm:flex-col sm:items-start sm:justify-start sm:pt-3">
+                <span className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <period.Icon className={`h-4 w-4 ${period.tint}`} /> {period.label}
+                </span>
+                {canEdit && (
+                    <div className="flex items-center gap-1 sm:mt-2">
+                        <button onClick={() => setAdding(true)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold text-violet-600 transition hover:bg-violet-50 dark:text-violet-400 dark:hover:bg-violet-950/40">
+                            <Plus className="h-3.5 w-3.5" /> Ajouter
+                        </button>
+                        {onHide && (
+                            <button onClick={onHide} title={`Masquer « ${period.label} »`} className="rounded-lg p-1 text-slate-300 transition hover:bg-slate-100 hover:text-slate-600 sm:opacity-0 sm:group-hover/period:opacity-100 dark:hover:bg-slate-800">
+                                <EyeOff className="h-3.5 w-3.5" />
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
 
-            {/* Zone de drop UNIQUEMENT pour la liste des activités sous le titre */}
-            <Droppable droppableId={periodKey} isDropDisabled={!canEdit}>
+            <Droppable droppableId={droppableIdFor(dayId, periodKey)} isDropDisabled={!canEdit}>
                 {(provided, snapshot) => (
                     <div
                         ref={provided.innerRef}
                         {...provided.droppableProps}
-                        className={`space-y-2 flex-1 min-h-[60px] rounded-lg transition-colors ${
-                            snapshot.isDraggingOver
-                                ? "bg-indigo-50/50 dark:bg-indigo-950/20 border-2 border-dashed border-indigo-300 dark:border-indigo-700 p-1"
-                                : ""
-                        }`}
+                        className={`min-h-[3.25rem] space-y-2 rounded-2xl p-1 transition-colors border-2 ${snapshot.isDraggingOver ? "border-dashed border-violet-300 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/30" : "border-transparent"}`}
                     >
-                        {filteredActivities.map((act, index) => (
-                            <Draggable
-                                key={act.id}
-                                draggableId={String(act.id)}
-                                index={index}
-                                isDragDisabled={!canEdit}
-                            >
-                                {(provided, snapshot) => (
-                                    <div
-                                        ref={provided.innerRef}
-                                        {...provided.draggableProps}
-                                        {...provided.dragHandleProps}
-                                        style={{
-                                            ...provided.draggableProps.style,
-                                        }}
-                                        className={`${snapshot.isDragging ? "shadow-2xl opacity-90 scale-[1.02] cursor-grabbing" : ""}`}
-                                    >
-                                        <ActivityItem
-                                            activity={act}
-                                            onDelete={onActivityDeleted}
-                                        />
+                        {items.map((activity, index) => (
+                            <Draggable key={activity.id} draggableId={String(activity.id)} index={index} isDragDisabled={!canEdit}>
+                                {(draggable, state) => (
+                                    <div ref={draggable.innerRef} {...draggable.draggableProps} className={state.isDragging ? "rotate-1 opacity-90 shadow-2xl" : ""}>
+                                        <ActivityItem activity={activity} dragHandle={draggable.dragHandleProps} onDelete={onActivityDeleted} onUpdated={onActivityUpdated} />
                                     </div>
                                 )}
                             </Draggable>
                         ))}
                         {provided.placeholder}
-                        {isAdding && (
-                            <form
-                                onSubmit={handleAdd}
-                                className="p-3 bg-white dark:bg-slate-800 rounded-lg border border-indigo-200 space-y-2 mt-2"
-                            >
-                                <input
-                                    type="text"
-                                    placeholder="Titre de l'activité..."
-                                    value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                    className="w-full text-xs rounded border-slate-300 dark:bg-slate-900 dark:text-white"
-                                    required
-                                />
-                                <div className="grid grid-cols-2 gap-2">
-                                    <select
-                                        value={category}
-                                        onChange={(e) => setCategory(e.target.value)}
-                                        className="text-xs rounded border-slate-300 dark:bg-slate-900 dark:text-white"
-                                    >
-                                        <option value="visite">Visite / Activité</option>
-                                        <option value="repas">Restaurant / Repas</option>
-                                        <option value="hebergement">Hébergement</option>
-                                        <option value="transport">Transport</option>
-                                        <option value="autre">Autre</option>
-                                    </select>
-                                    <input
-                                        type="number"
-                                        placeholder="Prix (€)"
-                                        value={price}
-                                        onChange={(e) => setPrice(e.target.value)}
-                                        className="text-xs rounded border-slate-300 dark:bg-slate-900 dark:text-white"
-                                    />
-                                </div>
-                                <input
-                                    type="text"
-                                    placeholder="Lieu / adresse"
-                                    value={locationName}
-                                    onChange={(e) => setLocationName(e.target.value)}
-                                    className="w-full text-xs rounded border-slate-300 dark:bg-slate-900 dark:text-white"
-                                />
-                                <textarea
-                                    placeholder="Description et informations utiles..."
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                    rows="2"
-                                    className="w-full text-xs rounded border-slate-300 dark:bg-slate-900 dark:text-white"
-                                />
-                                <input
-                                    type="url"
-                                    placeholder="Lien du site ou de réservation (facultatif)"
-                                    value={sourceUrl}
-                                    onChange={(e) => setSourceUrl(e.target.value)}
-                                    className="w-full text-xs rounded border-slate-300 dark:bg-slate-900 dark:text-white"
-                                />
-                                <div className="flex justify-end gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsAdding(false)}
-                                        className="text-xs text-slate-500 px-2 py-1"
-                                    >
-                                        Annuler
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="text-xs bg-indigo-600 text-white px-3 py-1 rounded font-medium"
-                                    >
-                                        Ajouter
-                                    </button>
-                                </div>
-                            </form>
+                        {!items.length && !snapshot.isDraggingOver && (
+                            canEdit ? (
+                                <button onClick={() => setAdding(true)} className="flex w-full items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-slate-200 py-3 text-xs font-semibold text-slate-400 transition hover:border-violet-300 hover:text-violet-600 dark:border-slate-700">
+                                    <Plus className="h-4 w-4" /> Rien de prévu
+                                </button>
+                            ) : (
+                                <p className="rounded-2xl border-2 border-dashed border-slate-200 py-3 text-center text-xs text-slate-400 dark:border-slate-700">Rien de prévu</p>
+                            )
                         )}
                     </div>
                 )}
             </Droppable>
+
+            {adding && (
+                <ActivitySheet title="Nouvelle activité" subtitle={period.label} Icon={period.Icon} onClose={() => setAdding(false)}>
+                    <ActivityForm
+                        dayId={dayId}
+                        period={periodKey}
+                        onCancel={() => setAdding(false)}
+                        onSaved={(activity) => {
+                            onActivityAdded?.(activity);
+                            setAdding(false);
+                        }}
+                    />
+                </ActivitySheet>
+            )}
         </div>
     );
 }

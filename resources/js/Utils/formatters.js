@@ -19,3 +19,9 @@ export function formatDate(dateString) {
         year: "numeric",
     }).format(date);
 }
+
+const moneyFormatter = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
+
+export function formatMoney(amount) {
+    return moneyFormatter.format(Number(amount) || 0);
+}

@@ -46,13 +46,32 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'subscription_ends_at' => 'datetime',
+            'premium_granted' => 'boolean',
         ];
     }
 
+    /** Membre de l'équipe qui répond au chat d'assistance (SUPPORT_ADMIN_EMAILS). */
+    public function isSupportAgent(): bool
+    {
+        return in_array(strtolower((string) $this->email), array_map('strtolower', config('support.admins', [])), true);
+    }
+
+    /** Premium payé via Stripe, ou offert à la main depuis le back-office (premium_granted). */
     public function hasPremiumAccess(): bool
+    {
+        return $this->premium_granted || $this->hasStripePremium();
+    }
+
+    public function hasStripePremium(): bool
     {
         return in_array($this->subscription_status, ['active', 'trialing'], true)
             && (!$this->subscription_ends_at || $this->subscription_ends_at->isFuture());
+    }
+
+    /** Voyages publiés mis en favoris (page « Parcourir »). */
+    public function favoriteTrips()
+    {
+        return $this->belongsToMany(Trip::class, 'trip_favorites')->withTimestamps();
     }
 
     public function trips()

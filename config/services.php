@@ -41,11 +41,12 @@ return [
     ],
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
-        'model' => env('GEMINI_MODEL', 'gemini-flash-latest'),
+        'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
         'fallback_models' => array_values(array_filter(array_map(
             'trim',
-            explode(',', env('GEMINI_FALLBACK_MODELS', 'gemini-2.5-flash-lite,gemini-2.5-flash')),
+            explode(',', env('GEMINI_FALLBACK_MODELS', 'gemini-3.5-flash-lite')),
         ))),
+        'timeout' => env('GEMINI_TIMEOUT', 50),
         'rate_limit_per_minute' => env('GEMINI_RATE_LIMIT_PER_MINUTE', 2),
         'free_daily_limit' => env('GEMINI_FREE_DAILY_LIMIT', 3),
         'premium_daily_limit' => env('GEMINI_PREMIUM_DAILY_LIMIT', 1000),

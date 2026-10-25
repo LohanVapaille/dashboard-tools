@@ -10,7 +10,8 @@ class FlightPricing
 {
     public static function percent(): float
     {
-        return max(0, (float) config('flights.tax_percent', 5));
+        // Modèle partenaires : le prix affiché est celui du vendeur, sans frais ajoutés.
+        return config('commerce.direct_booking') ? max(0, (float) config('flights.tax_percent', 5)) : 0.0;
     }
 
     public static function fee(float $airlineAmount): float

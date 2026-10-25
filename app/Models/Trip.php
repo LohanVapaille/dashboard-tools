@@ -16,12 +16,54 @@ class Trip extends Model
         'guest_token',
         'is_private',
         'visible_tabs',
+        'origin_name',
+        'origin_latitude',
+        'origin_longitude',
+        'travelers',
+        'budget_target',
     ];
 
     protected $casts = [
         'is_private' => 'boolean',
         'visible_tabs' => 'array',
+        'origin_latitude' => 'float',
+        'origin_longitude' => 'float',
+        'travelers' => 'integer',
+        'budget_target' => 'decimal:2',
+        'published_at' => 'datetime',
+        'published_budget' => 'decimal:2',
+        'published_summary' => 'array',
     ];
+
+    public function isPublished(): bool
+    {
+        return $this->published_at !== null;
+    }
+
+    /** Image d'aperçu de la page « Parcourir » (chemin du disque public ou URL absolue). */
+    public function coverUrl(): ?string
+    {
+        if (!$this->cover_image) {
+            return null;
+        }
+
+        return Str::startsWith($this->cover_image, ['http://', 'https://', '/']) ? $this->cover_image : '/storage/' . $this->cover_image;
+    }
+
+    public function scopePublished($query)
+    {
+        return $query->whereNotNull('published_at');
+    }
+
+    public function favoritedBy()
+    {
+        return $this->belongsToMany(User::class, 'trip_favorites')->withTimestamps();
+    }
+
+    public function copies()
+    {
+        return $this->hasMany(Trip::class, 'copied_from_id');
+    }
 
     public function user()
     {
@@ -43,9 +85,24 @@ class Trip extends Model
         return $this->hasMany(TripNote::class)->orderBy('position');
     }
 
+    public function reservations()
+    {
+        return $this->hasMany(TripReservation::class)->orderByRaw("starts_at is null")->orderBy("starts_at")->orderBy("id");
+    }
+
     public function participants()
     {
         return $this->hasMany(TripParticipant::class);
+    }
+
+    public function budgetMembers()
+    {
+        return $this->hasMany(TripBudgetMember::class)->orderBy('id');
+    }
+
+    public function expenses()
+    {
+        return $this->hasMany(TripExpense::class)->latest('spent_on')->latest('id');
     }
 
     public function photos()
@@ -58,6 +115,15 @@ class Trip extends Model
         static::creating(function (Trip $trip) {
             $trip->share_token = $trip->share_token ?: Str::random(32);
         });
+    }
+
+    public const FREE_EXPENSE_LIMIT = 15;
+    public const FREE_PHOTO_LIMIT = 5;
+
+    /** Fonctions Premium du voyage : actives si l'organisateur ou la personne connectée est abonné. */
+    public function hasPremium($viewer = null): bool
+    {
+        return (bool) ($this->user?->hasPremiumAccess() || $viewer?->hasPremiumAccess());
     }
 
     // Un invité est propriétaire via guest_token, un utilisateur via user_id.

@@ -10,7 +10,7 @@ class FlightCartItem extends Model
 {
     protected $fillable = [
         'user_id', 'trip_id', 'provider', 'offer_id', 'direction', 'passengers_count',
-        'currency', 'flight_amount', 'offer', 'raw_offer', 'expires_at',
+        'currency', 'flight_amount', 'offer', 'raw_offer', 'expires_at', 'services', 'services_amount',
     ];
 
     protected $hidden = ['raw_offer'];
@@ -19,6 +19,8 @@ class FlightCartItem extends Model
     {
         return [
             'offer' => 'array',
+            'services' => 'array',
+            'services_amount' => 'decimal:2',
             'raw_offer' => 'array',
             'flight_amount' => 'decimal:2',
             'expires_at' => 'datetime',

@@ -10,7 +10,9 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
-    <link rel="shortcut icon" href="img/favicon.webp" type="image/x-icon">
+    {{-- Chemin absolu : en relatif, l'icône disparaissait sur les pages imbriquées (/trips/12, /admin/…). --}}
+    <link rel="icon" href="/img/favicon.webp" type="image/webp">
+    <link rel="apple-touch-icon" href="/img/favicon.webp">
 
     <!-- Scripts -->
     @routes

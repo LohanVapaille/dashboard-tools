@@ -19,6 +19,6 @@ class TripPhoto extends Model
 
     public function getUrlAttribute(): string
     {
-        return Storage::disk('public')->url($this->path);
+        return '/storage/' . ltrim($this->path, '/');
     }
 }

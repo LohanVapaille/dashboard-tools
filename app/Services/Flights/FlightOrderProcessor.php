@@ -104,6 +104,7 @@ class FlightOrderProcessor
                 $passengers,
                 number_format((float) $booking->flight_amount, 2, '.', ''),
                 $booking->currency,
+                collect($booking->services ?? [])->map(fn ($service) => ['id' => $service['id'], 'quantity' => $service['quantity']])->all(),
             );
 
             $booking->update([

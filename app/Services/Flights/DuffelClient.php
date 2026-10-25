@@ -45,23 +45,27 @@ class DuffelClient
         return $response->json('data.offers', []);
     }
 
-    public function getOffer(string $offerId): array
+    public function getOffer(string $offerId, bool $withServices = false): array
     {
         $response = $this->send(
-            fn (PendingRequest $http) => $http->get($this->url('/air/offers/' . rawurlencode($offerId))),
+            fn (PendingRequest $http) => $http->get(
+                $this->url('/air/offers/' . rawurlencode($offerId)),
+                $withServices ? ['return_available_services' => 'true'] : [],
+            ),
             'Cette offre a expiré ou n’est plus disponible. Relancez la recherche.',
         );
 
         return $response->json('data', []);
     }
 
-    public function createOrder(string $offerId, array $passengers, string $amount, string $currency): array
+    public function createOrder(string $offerId, array $passengers, string $amount, string $currency, array $services = []): array
     {
         $response = $this->send(fn (PendingRequest $http) => $http->timeout(60)->post($this->url('/air/orders'), [
             'data' => [
                 'type' => 'instant',
                 'selected_offers' => [$offerId],
                 'passengers' => $passengers,
+                ...($services ? ['services' => $services] : []),
                 'payments' => [[
                     'type' => 'balance',
                     'amount' => $amount,

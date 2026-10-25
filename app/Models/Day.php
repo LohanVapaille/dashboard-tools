@@ -25,7 +25,7 @@ class Day extends Model
 
     public function activities()
     {
-        return $this->hasMany(Activity::class)->orderBy('id');
+        return $this->hasMany(Activity::class)->orderBy('order_index')->orderBy('id');
     }
 
     public function blocks()

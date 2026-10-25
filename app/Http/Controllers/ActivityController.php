@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Day;
 use App\Models\Activity;
+use App\Models\Trip;
 use Illuminate\Http\Request;
 
 class ActivityController extends Controller
@@ -45,20 +46,42 @@ class ActivityController extends Controller
 
         $activity->update($validated);
 
-        return back();
+        return $request->wantsJson() ? response()->json($activity->fresh()) : back();
     }
 
     public function updatePeriod(Request $request, Activity $activity)
     {
         $validated = $request->validate([
             'period' => 'required|in:matin,midi,apres_midi,soir,nuit',
+            'day_id' => 'sometimes|integer|exists:days,id',
+            // Identifiants de la période d'arrivée, dans l'ordre affiché après le déplacement.
+            'order' => 'sometimes|array|max:200',
+            'order.*' => 'integer',
         ]);
 
-        $activity->update([
-            'period' => $validated['period']
-        ]);
+        // Changement de journée : uniquement vers un jour du même voyage.
+        if (isset($validated['day_id'])) {
+            $tripId = $activity->day->stay->trip_id;
+            abort_unless(
+                Day::whereKey($validated['day_id'])->whereHas('stay', fn ($query) => $query->where('trip_id', $tripId))->exists(),
+                422,
+                'Cette journée n’appartient pas à ce voyage.'
+            );
+        }
 
-        return response()->json($activity);
+        $activity->update(collect($validated)->except('order')->all());
+
+        if (isset($validated['order'])) {
+            $siblings = Activity::where('day_id', $activity->day_id)->where('period', $activity->period)->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $position = 0;
+            foreach ($validated['order'] as $id) {
+                if (in_array($id, $siblings, true)) {
+                    Activity::whereKey($id)->update(['order_index' => $position++]);
+                }
+            }
+        }
+
+        return response()->json($activity->fresh());
     }
 
     public function destroy(Activity $activity)
@@ -67,5 +90,13 @@ class ActivityController extends Controller
 
         // Si la requête est en AJAX/Axios, un statut 200 vide ou noContent convient parfaitement
         return response()->noContent();
+    }
+
+    /** Vide tout le programme du voyage (activités de toutes les journées), étapes et infos conservées. */
+    public function destroyAll(Trip $trip)
+    {
+        $deleted = Activity::whereIn('day_id', Day::whereIn('stay_id', $trip->stays()->select('id'))->select('id'))->delete();
+
+        return response()->json(['deleted' => $deleted]);
     }
 }

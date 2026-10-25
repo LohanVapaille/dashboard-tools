@@ -10,6 +10,7 @@ use App\Services\Flights\FlightOrderProcessor;
 use App\Services\Flights\FlightPricing;
 use App\Services\Flights\FlightProviderException;
 use App\Services\Flights\Providers\DuffelProvider;
+use App\Services\Payments\CheckoutEventRouter;
 use App\Services\Payments\StripeClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -61,20 +62,21 @@ class FlightCheckoutController extends Controller
         // Prix garanti : on recharge chaque offre auprès de la compagnie avant de facturer.
         $changed = [];
         foreach ($items as $item) {
+            $selected = collect($item->services ?? [])->map(fn ($service) => ['id' => $service['id'], 'quantity' => $service['quantity']])->all();
             try {
-                [$offer, $raw] = $duffel->refresh($item->offer_id);
+                [$offer, $raw] = $duffel->refresh($item->offer_id, (bool) $selected);
+                if (!$offer) {
+                    throw new FlightProviderException('Un des vols n’est plus disponible.');
+                }
+                [$services, $servicesAmount] = DuffelProvider::resolveServices($raw, $selected);
             } catch (FlightProviderException $exception) {
-                throw ValidationException::withMessages(['checkout' => $exception->getMessage() . ' Retirez ce vol du panier.']);
+                throw ValidationException::withMessages(['checkout' => $exception->getMessage() . ' Retirez ce vol du panier et relancez la recherche.']);
             }
-            if (!$offer) {
-                throw ValidationException::withMessages(['checkout' => 'Un des vols n’est plus disponible. Retirez-le du panier et relancez la recherche.']);
-            }
-            if (abs((float) $offer['airline_amount'] - (float) $item->flight_amount) >= 0.01) {
+            $amount = round($offer['airline_amount'] + $servicesAmount, 2);
+            if (abs($amount - (float) $item->flight_amount) >= 0.01) {
                 $changed[] = $item->id;
-                $item->update(['offer' => $offer, 'raw_offer' => $raw, 'flight_amount' => $offer['airline_amount']]);
-                continue;
             }
-            $item->update(['offer' => $offer, 'raw_offer' => $raw]);
+            $item->update(['offer' => $offer, 'raw_offer' => $raw, 'services' => $services, 'services_amount' => $servicesAmount, 'flight_amount' => $amount]);
         }
 
         if ($changed) {
@@ -118,6 +120,8 @@ class FlightCheckoutController extends Controller
                     'passengers' => $validated['passengers'],
                     'offer_snapshot' => $item->raw_offer,
                     'offer' => $item->offer,
+                    'services' => $item->services,
+                    'services_amount' => $item->services_amount,
                 ]);
             }
 
@@ -154,7 +158,8 @@ class FlightCheckoutController extends Controller
         return redirect()->route('flights.orders.show', $order);
     }
 
-    public function webhook(Request $request, FlightOrderProcessor $processor)
+    /** Webhook dédié aux achats (vols et hébergements). */
+    public function webhook(Request $request, CheckoutEventRouter $router)
     {
         $secrets = array_filter([config('services.stripe.flight_webhook_secret'), config('services.stripe.webhook_secret')]);
         $valid = collect($secrets)->contains(fn ($secret) => StripeClient::validSignature($request->getContent(), $request->header('Stripe-Signature'), $secret));
@@ -163,23 +168,7 @@ class FlightCheckoutController extends Controller
             return response()->json(['message' => 'Signature Stripe invalide.'], 400);
         }
 
-        return $this->handleEvent($request->json()->all(), $processor);
-    }
-
-    public function handleEvent(array $event, FlightOrderProcessor $processor)
-    {
-        $session = $event['data']['object'] ?? [];
-        $order = FlightOrder::find($session['metadata']['flight_order_id'] ?? null);
-
-        if (!$order) {
-            return response()->json(['received' => true]);
-        }
-
-        match ($event['type'] ?? '') {
-            'checkout.session.completed', 'checkout.session.async_payment_succeeded' => $processor->handlePaidSession($order, $session),
-            'checkout.session.expired' => $processor->markExpired($order),
-            default => null,
-        };
+        $router->handle($request->json()->all());
 
         return response()->json(['received' => true]);
     }
@@ -203,7 +192,14 @@ class FlightCheckoutController extends Controller
                     'unit_amount' => FlightPricing::toMinor((float) $booking->flight_amount, $order->currency),
                     'product_data' => [
                         'name' => sprintf('%s · %s (%s) → %s (%s)', $label, $offer['origin']['city'] ?: $offer['origin']['code'], $offer['origin']['code'], $offer['destination']['city'] ?: $offer['destination']['code'], $offer['destination']['code']),
-                        'description' => sprintf('%s · %s · %s · %d passager(s) · tarif compagnie, taxes aéroportuaires incluses', $offer['airline']['name'], $departure, $stops, $offer['passengers_count']),
+                        'description' => sprintf(
+                            '%s · %s · %s · %d passager(s)%s · tarif compagnie, taxes aéroportuaires incluses',
+                            $offer['airline']['name'],
+                            $departure,
+                            $stops,
+                            $offer['passengers_count'],
+                            $booking->services ? ' · ' . collect($booking->services)->sum('quantity') . ' bagage(s) ajouté(s)' : '',
+                        ),
                     ],
                 ],
                 'quantity' => 1,

@@ -18,7 +18,7 @@ class FlightSearchService
     /** @var FlightProvider[] */
     private array $providers;
 
-    public function __construct(DuffelProvider $duffel, TravelpayoutsProvider $travelpayouts)
+    public function __construct(DuffelProvider $duffel, private readonly TravelpayoutsProvider $travelpayouts)
     {
         $this->providers = [$duffel, $travelpayouts];
     }
@@ -64,10 +64,15 @@ class FlightSearchService
             throw new FlightProviderException($warnings[0] ?? 'La recherche de vols a échoué.');
         }
 
+        $aviasales = $this->travelpayouts->enabled();
+
         return [
             'offers' => $this->merge($offers, $query),
             'providers' => $succeeded,
             'warnings' => $warnings,
+            // Meilleurs prix Aviasales du mois et recherche en temps réel chez eux.
+            'calendar' => $aviasales ? rescue(fn () => $this->travelpayouts->calendar($query), [], false) : [],
+            'aviasales_url' => $aviasales ? $this->travelpayouts->searchUrl($query) : null,
         ];
     }
 

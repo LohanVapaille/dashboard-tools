@@ -5,127 +5,131 @@ namespace App\Http\Controllers;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use App\Models\Trip;
 use App\Models\Activity;
+use App\Models\StayTransition;
 use App\Services\AI\GeminiItineraryService;
+use App\Services\AI\ItineraryPlan;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Validator;
 use Throwable;
 
 class AIItineraryController extends Controller
 {
     use AuthorizesRequests;
 
-    private const PERIODS = ['matin', 'midi', 'apres_midi', 'soir', 'nuit'];
-    private const CATEGORIES = ['transport', 'hebergement', 'camping', 'repas', 'visite', 'loisir', 'autre'];
-
     public function generate(Request $request, Trip $trip, GeminiItineraryService $gemini)
     {
         $this->authorize('update', $trip);
+        // Plusieurs modèles peuvent être essayés l'un après l'autre.
+        set_time_limit(150);
 
         $validated = $request->validate([
             'interests' => ['nullable', 'string', 'max:3000'],
         ]);
 
-        $trip->load('stays.days');
-        $days = $trip->stays->flatMap(function ($stay) {
-            return $stay->days->map(fn ($day) => [
-                'date' => $day->date,
-                'day_id' => $day->id,
-                'location' => $stay->location_name,
-            ]);
-        })->values()->all();
-
-        if (!$days) {
-            return response()->json(['message' => 'Ajoutez au moins un séjour avant de générer un itinéraire.'], 422);
-        }
+        $plan = new ItineraryPlan($trip);
+        $context = $plan->context($validated['interests'] ?? '');
 
         try {
-            $suggestions = $gemini->suggest([
-                'title' => $trip->title,
-                'description' => $trip->description,
-                'interests' => $validated['interests'] ?? '',
-                'days' => $days,
-            ]);
+            $suggestions = $gemini->suggest($context);
         } catch (Throwable $exception) {
             report($exception);
             $status = str_contains($exception->getMessage(), 'temporairement très sollicité') ? 503 : 502;
             return response()->json(['message' => $exception->getMessage()], $status);
         }
 
-        return response()->json(['days' => $this->sanitizeSuggestions($suggestions['days'], $days)]);
+        $stays = $plan->normalize($suggestions['stays']);
+
+        return response()->json([
+            'mode' => $context['mode'],
+            'stays' => $stays,
+            'replaced' => $plan->replacedStays($stays),
+        ]);
     }
 
     public function store(Request $request, Trip $trip)
     {
         $this->authorize('update', $trip);
 
-        $validated = $request->validate([
-            'days' => ['required', 'array', 'max:100'],
-            'days.*.day_id' => ['required', 'integer'],
-            'days.*.activities' => ['required', 'array', 'max:3'],
-            'days.*.activities.*.title' => ['required', 'string', 'max:191'],
-            'days.*.activities.*.description' => ['nullable', 'string', 'max:2000'],
-            'days.*.activities.*.period' => ['required', 'in:' . implode(',', self::PERIODS)],
-            'days.*.activities.*.category' => ['required', 'in:' . implode(',', self::CATEGORIES)],
-            'days.*.activities.*.price' => ['nullable', 'numeric', 'min:0'],
-            'days.*.activities.*.location_name' => ['nullable', 'string', 'max:191'],
-            'days.*.activities.*.source_url' => ['nullable', 'url:http,https', 'max:2048'],
+        $request->validate([
+            'stays' => ['required', 'array', 'max:60'],
+            'stays.*.days' => ['nullable', 'array', 'max:100'],
         ]);
 
-        $dayIds = $trip->stays()->with('days')->get()->flatMap->days->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $created = 0;
+        $itinerary = new ItineraryPlan($trip);
+        $plan = $itinerary->normalize($request->input('stays'));
+        abort_if($plan === [], 422, 'Aucune proposition valide à enregistrer.');
+        $replaced = array_column($itinerary->replacedStays($plan), 'id');
 
-        DB::transaction(function () use ($validated, $dayIds, &$created) {
-            foreach ($validated['days'] as $day) {
-                abort_unless(in_array((int) $day['day_id'], $dayIds, true), 422, 'Un jour ne correspond pas à ce voyage.');
-                foreach ($day['activities'] as $activity) {
-                    Activity::create([
-                        'day_id' => (int) $day['day_id'],
-                        'period' => $activity['period'],
-                        'category' => $activity['category'],
-                        'title' => $activity['title'],
-                        'description' => $activity['description'] ?? null,
-                        'price' => $activity['price'] ?? null,
-                        'location_name' => $activity['location_name'] ?? null,
-                        'source_url' => $activity['source_url'] ?? null,
+        $counts = ['stays' => 0, 'activities' => 0];
+
+        DB::transaction(function () use ($trip, $plan, $replaced, &$counts) {
+            $newStayIds = [];
+            // Séjours vides redécoupés en plusieurs étapes : leurs jours et trajets partent avec eux.
+            $trip->stays()->whereIn('id', $replaced)->get()->each->delete();
+
+            foreach ($plan as $entry) {
+                if ($entry['is_new']) {
+                    $stay = $trip->stays()->create([
+                        'location_name' => $entry['location_name'],
+                        'latitude' => $entry['latitude'],
+                        'longitude' => $entry['longitude'],
+                        'arrival_date' => $entry['arrival_date'],
+                        'departure_date' => $entry['departure_date'],
+                        'notes' => $entry['accommodation_type'] ? 'Logement conseillé : ' . $entry['accommodation_type'] : null,
+                        'accommodation_cost' => $entry['accommodation_cost'],
                     ]);
-                    $created++;
+                    $stay->generateDays();
+                    $newStayIds[$stay->id] = $entry['transport_from_previous'];
+                    $counts['stays']++;
+                } else {
+                    $stay = $trip->stays()->findOrFail($entry['id']);
+                    if ($entry['accommodation_cost'] !== null && $stay->accommodation_cost === null) {
+                        $stay->update(['accommodation_cost' => $entry['accommodation_cost']]);
+                    }
+                }
+
+                $dayIds = $stay->days()->get()->mapWithKeys(fn ($day) => [Carbon::parse($day->date)->toDateString() => $day->id]);
+
+                foreach ($entry['days'] as $day) {
+                    $dayId = $dayIds[$day['date']] ?? null;
+                    if (!$dayId) {
+                        continue;
+                    }
+                    foreach ($day['activities'] as $activity) {
+                        Activity::create(['day_id' => $dayId, ...$activity]);
+                        $counts['activities']++;
+                    }
                 }
             }
+
+            $this->linkNewStays($trip, $newStayIds);
         });
 
-        return response()->json(['created' => $created]);
+        return response()->json(['created' => $counts['activities'], 'stays' => $counts['stays']]);
     }
 
-    private function sanitizeSuggestions(array $suggestions, array $days): array
+    /** Crée le trajet entre chaque nouveau séjour et l'étape qui le précède, s'il n'existe pas déjà. */
+    private function linkNewStays(Trip $trip, array $newStays): void
     {
-        $allowedDates = collect($days)->keyBy('date');
+        $ordered = $trip->stays()->orderBy('arrival_date')->orderBy('departure_date')->get()->values();
 
-        return collect($suggestions)->map(function ($day) use ($allowedDates) {
-            if (!is_array($day) || !isset($allowedDates[$day['date']])) {
-                return null;
+        foreach ($ordered as $index => $stay) {
+            $transport = $newStays[$stay->id] ?? null;
+            $previous = $ordered[$index - 1] ?? null;
+
+            if (!$transport || !$previous || StayTransition::where('from_stay_id', $previous->id)->exists()) {
+                continue;
             }
 
-            $activities = collect($day['activities'] ?? [])->take(3)->map(function ($activity) {
-                $validator = Validator::make($activity, [
-                    'title' => ['required', 'string', 'max:191'],
-                    'description' => ['nullable', 'string', 'max:2000'],
-                    'period' => ['required', 'in:' . implode(',', self::PERIODS)],
-                    'category' => ['required', 'in:' . implode(',', self::CATEGORIES)],
-                    'price' => ['nullable', 'numeric', 'min:0'],
-                    'location_name' => ['nullable', 'string', 'max:191'],
-                    'source_url' => ['nullable', 'url:http,https', 'max:2048'],
-                ]);
-
-                return $validator->passes() ? $validator->validated() : null;
-            })->filter()->values()->all();
-
-            return [
-                'date' => $day['date'],
-                'day_id' => $allowedDates[$day['date']]['day_id'],
-                'location' => $allowedDates[$day['date']]['location'],
-                'activities' => $activities,
-            ];
-        })->filter()->values()->all();
+            StayTransition::create([
+                'trip_id' => $trip->id,
+                'from_stay_id' => $previous->id,
+                'to_stay_id' => $stay->id,
+                'transport_mode' => $transport['mode'],
+                'duration_minutes' => $transport['duration_minutes'],
+                'cost' => $transport['cost'],
+            ]);
+        }
     }
 }

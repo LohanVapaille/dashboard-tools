@@ -1,9 +1,14 @@
 import React from "react";
 import { Link, usePage } from "@inertiajs/react";
-import { Compass, LogIn, ShoppingCart, Ticket, User as UserIcon } from "lucide-react";
+import { Compass, Headset, LogIn, Luggage, ShoppingCart, Ticket, User as UserIcon } from "lucide-react";
+import BrandMark from "@/Components/BrandMark";
+import CookieConsent from "@/Components/CookieConsent";
+import ConfirmHost from "@/Components/ConfirmDialog";
+import SupportWidget from "@/Components/Support/SupportWidget";
+import { openCookieSettings } from "@/Utils/consent";
 
 export default function GuestLayout({ children }) {
-    const { auth, cart } = usePage().props;
+    const { auth, cart, legal, commerce } = usePage().props;
     const user = auth?.user;
     const cartCount = cart?.count || 0;
 
@@ -19,31 +24,46 @@ export default function GuestLayout({ children }) {
                         href={route("trips.index")}
                         className="flex items-center gap-2 font-bold text-lg tracking-tight"
                     >
-                        <div className="p-1.5 bg-gradient-to-br from-sky-400 via-indigo-500 to-violet-600 rounded-lg shadow-lg shadow-indigo-500/30">
-                            <Compass className="w-5 h-5 text-white" />
-                        </div>
+                        <BrandMark />
                         <span>
-                            Travel<span className="bg-gradient-to-r from-sky-300 to-violet-300 bg-clip-text text-transparent">Planner</span>
+                            Lova<span className="bg-gradient-to-r from-sky-300 to-violet-300 bg-clip-text text-transparent">Trip</span>
                         </span>
                     </Link>
 
                     <div className="flex items-center gap-3 sm:gap-6">
+                        {auth?.support_agent && (
+                            <Link href={route("admin.support.index")} className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-fuchsia-300 hover:text-white transition">
+                                <Headset className="w-3.5 h-3.5" />
+                                Assistance
+                            </Link>
+                        )}
+                        {user && (
+                            <Link
+                                href={route("flights.orders.index")}
+                                className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white transition"
+                            >
+                                <Ticket className="w-3.5 h-3.5 text-sky-300" />
+                                Mes réservations
+                            </Link>
+                        )}
+                        <Link
+                            href={route("explore.index")}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white transition"
+                        >
+                            <Compass className="w-3.5 h-3.5 text-emerald-300" />
+                            Parcourir
+                        </Link>
                         <Link
                             href={route("trips.index")}
-                            className="hidden sm:inline text-xs font-semibold text-slate-300 hover:text-white transition"
+                            className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white transition"
                         >
+                            <Luggage className="w-3.5 h-3.5 text-amber-300" />
                             Mes voyages
                         </Link>
 
-                        {user && (
+                        {/* Panier et réservations uniquement en vente directe (sinon tout se paie chez les partenaires). */}
+                        {user && commerce?.direct_booking && (
                             <>
-                                <Link
-                                    href={route("flights.orders.index")}
-                                    className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white transition"
-                                >
-                                    <Ticket className="w-3.5 h-3.5 text-sky-300" />
-                                    Réservations
-                                </Link>
                                 <Link
                                     href={route("flights.cart.index")}
                                     title="Mon panier"
@@ -109,6 +129,22 @@ export default function GuestLayout({ children }) {
             </header>
 
             <main>{children}</main>
+
+            <footer className="mt-16 border-t border-slate-200 bg-white/70 px-6 py-8 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-900/70 print:hidden">
+                <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 md:flex-row">
+                    <p>© {new Date().getFullYear()} {legal?.company || "LovaTrip"} · {commerce?.direct_booking ? "Intermédiaire de réservation de voyages" : "Planification de voyage"}</p>
+                    <nav className="flex flex-wrap justify-center gap-x-5 gap-y-2 font-semibold">
+                        <Link href={route("legal.notice")} className="hover:text-indigo-600">Mentions légales</Link>
+                        <Link href={route("legal.terms")} className="hover:text-indigo-600">Conditions générales</Link>
+                        <Link href={route("legal.privacy")} className="hover:text-indigo-600">Confidentialité et cookies</Link>
+                        <button type="button" onClick={openCookieSettings} className="font-semibold hover:text-indigo-600">Gérer mes cookies</button>
+                    </nav>
+                </div>
+            </footer>
+
+            <CookieConsent />
+            <ConfirmHost />
+            <SupportWidget />
         </div>
     );
 }

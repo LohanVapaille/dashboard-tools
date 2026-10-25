@@ -13,6 +13,7 @@ class FlightBooking extends Model
         'flight_amount', 'service_fee', 'total_amount', 'refunded_amount', 'passengers',
         'offer_snapshot', 'offer', 'stripe_checkout_session_id', 'stripe_payment_intent_id', 'duffel_order_id',
         'booking_reference', 'ticket_numbers', 'failure_reason', 'cancelled_at', 'tax_refund_requested_at',
+        'services', 'services_amount',
     ];
 
     protected $hidden = ['offer_snapshot', 'passengers', 'stripe_checkout_session_id', 'stripe_payment_intent_id'];
@@ -23,6 +24,8 @@ class FlightBooking extends Model
             'passengers' => 'array',
             'offer_snapshot' => 'array',
             'offer' => 'array',
+            'services' => 'array',
+            'services_amount' => 'decimal:2',
             'ticket_numbers' => 'array',
             'flight_amount' => 'decimal:2',
             'service_fee' => 'decimal:2',

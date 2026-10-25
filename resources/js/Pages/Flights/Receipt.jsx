@@ -273,7 +273,7 @@ export default function Receipt({ order: initialOrder, seller, feeLabel }) {
                         <p className="mt-4 text-[11px] text-slate-400">
                             {seller.name}{seller.address ? ` · ${seller.address}` : ""}{seller.email ? ` · ${seller.email}` : ""}
                             <br />
-                            <Link href={route("flights.terms")} className="underline print:no-underline">Conditions de vente et remboursements</Link>
+                            <Link href={route("legal.terms")} className="underline print:no-underline">Conditions de vente et remboursements</Link>
                             {" · "}Médiation : {seller.mediator}
                         </p>
                     </div>

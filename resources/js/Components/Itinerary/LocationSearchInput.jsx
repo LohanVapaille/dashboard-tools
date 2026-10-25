@@ -6,15 +6,30 @@ export default function LocationSearchInput({
     onChange,
     onSelectLocation,
     placeholder = "Rechercher une ville, lieu, adresse...",
+    required = true,
 }) {
     const [query, setQuery] = useState(value || "");
     const [suggestions, setSuggestions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef(null);
+    // Valeur déjà remplie au chargement : pas de suggestions tant que l’utilisateur ne tape rien.
+    const skipSearch = useRef(Boolean(value));
+
+    // Valeur modifiée par le parent (ex. choix d'une étape) : on l'affiche sans rouvrir les suggestions.
+    useEffect(() => {
+        if ((value || "") !== query) {
+            skipSearch.current = true;
+            setQuery(value || "");
+        }
+    }, [value]);
 
     // Recherche avec un léger délai (debounce) pour ne pas surcharger l'API
     useEffect(() => {
+        if (skipSearch.current) {
+            skipSearch.current = false;
+            return;
+        }
         if (query.trim().length < 3) {
             setSuggestions([]);
             return;
@@ -55,6 +70,7 @@ export default function LocationSearchInput({
     }, []);
 
     const handleSelect = (item) => {
+        skipSearch.current = true;
         setQuery(item.display_name);
         setIsOpen(false);
         onChange(item.display_name);
@@ -64,6 +80,8 @@ export default function LocationSearchInput({
             name: item.display_name,
             latitude: parseFloat(item.lat),
             longitude: parseFloat(item.lon),
+            kind: item.addresstype || item.type,
+            country_code: item.address?.country_code,
         });
     };
 
@@ -78,8 +96,8 @@ export default function LocationSearchInput({
                         onChange(e.target.value);
                     }}
                     placeholder={placeholder}
-                    className="w-full pl-10 pr-10 py-2 rounded-lg border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500"
-                    required
+                    className="w-full pl-10 pr-10 py-2.5 rounded-xl border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500"
+                    required={required}
                 />
                 <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                 {loading && (

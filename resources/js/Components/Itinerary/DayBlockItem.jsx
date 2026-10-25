@@ -3,6 +3,7 @@ import { router } from "@inertiajs/react";
 import { Plus, Trash2, Check, X, ExternalLink } from "lucide-react";
 import { BLOCK_TYPES } from "@/Constants/dayBlocks";
 import { useTripPermissions } from "@/Contexts/TripPermissionsContext";
+import { confirmDialog } from "@/Components/ConfirmDialog";
 
 const inputClass =
     "w-full text-xs bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl px-3 py-2 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500";
@@ -55,8 +56,8 @@ export default function DayBlockItem({
             preserveState: true,
         });
 
-    const handleDelete = () => {
-        if (confirm(`Supprimer « ${block.title} » ?`)) {
+    const handleDelete = async () => {
+        if (await confirmDialog({ title: "Supprimer ce bloc ?", message: `« ${block.title} » et son contenu seront supprimés.`, confirmLabel: "Supprimer" })) {
             router.delete(route(`${routePrefix}.destroy`, block.id), {
                 preserveScroll: true,
                 preserveState: true,

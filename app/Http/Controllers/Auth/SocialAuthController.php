@@ -4,11 +4,9 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Models\Trip;
-use App\Models\TripParticipant;
+use App\Services\GuestAccountMerger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 
@@ -57,26 +55,9 @@ class SocialAuthController extends Controller
         return redirect()->intended('/trips');
     }
 
-    // Fonction de fusion des données anonymes
+    // Fusion des données anonymes : logique partagée avec la connexion par e-mail
     protected function mergeGuestDataToUser($user, Request $request)
     {
-        $guestToken = $request->cookie('guest_token');
-
-        if ($guestToken) {
-            // Rattacher les voyages créés anonymement
-            Trip::where('guest_token', $guestToken)->update([
-                'user_id' => $user->id,
-                'guest_token' => null
-            ]);
-
-            // Rattacher les participations (rôles) anonymes
-            TripParticipant::where('guest_token', $guestToken)->update([
-                'user_id' => $user->id,
-                'guest_token' => null
-            ]);
-
-            // Supprimer le cookie invité
-            Cookie::queue(Cookie::forget('guest_token'));
-        }
+        app(GuestAccountMerger::class)->merge($user, $request);
     }
 }

@@ -17,7 +17,8 @@ return [
     'tax_percent' => (float) env('FLIGHT_TAX_PERCENT', 5),
 
     // Libellé affiché au client pour ce supplément (reçu, panier, Stripe).
-    'tax_label' => env('FLIGHT_TAX_LABEL', 'Taxes et frais de service'),
+    // « Frais de service » : ce supplément n'est pas une taxe, le présenter comme tel serait trompeur.
+    'tax_label' => env('FLIGHT_TAX_LABEL', 'Frais de service'),
 
     /*
     |--------------------------------------------------------------------------
@@ -45,18 +46,27 @@ return [
     'providers' => [
         'duffel' => [
             'enabled' => (bool) env('DUFFEL_API_KEY'),
+            // Mode partenaires : Duffel ne sert qu'à afficher des vols précis (achat sur Aviasales). Sans vente,
+            // chaque recherche au-delà du ratio 1500:1 est facturée 0,005 $ (clé live). false = comparateurs seuls.
+            // Désactivé par défaut : ses tarifs ne sont pas ceux d'Aviasales (et sont fictifs avec une clé de test).
+            'partner_search' => filter_var(env('DUFFEL_PARTNER_SEARCH', false), FILTER_VALIDATE_BOOLEAN),
         ],
         'travelpayouts' => [
             'enabled' => (bool) env('TRAVELPAYOUTS_TOKEN'),
             'token' => env('TRAVELPAYOUTS_TOKEN'),
+            // Partner ID (« marker ») : identifiant personnel affiché dans le compte Travelpayouts.
             'marker' => env('TRAVELPAYOUTS_MARKER'),
+            // ID du projet (« trs », le source=… des pages Travelpayouts) : sert au script Drive et à l'API de liens.
+            'project_id' => env('TRAVELPAYOUTS_PROJECT_ID'),
+            // Script « Drive » : convertit automatiquement les liens sortants en liens affiliés.
+            'drive' => filter_var(env('TRAVELPAYOUTS_DRIVE', false), FILTER_VALIDATE_BOOLEAN),
             'base_url' => env('TRAVELPAYOUTS_BASE_URL', 'https://api.travelpayouts.com'),
         ],
     ],
 
     // Coordonnées affichées dans les conditions de vente et sur les reçus.
     'seller' => [
-        'name' => env('FLIGHT_SELLER_NAME', env('APP_NAME', 'TravelPlanner')),
+        'name' => env('FLIGHT_SELLER_NAME', env('APP_NAME', 'LovaTrip')),
         'email' => env('FLIGHT_SUPPORT_EMAIL', env('MAIL_FROM_ADDRESS')),
         'address' => env('FLIGHT_SELLER_ADDRESS'),
         'mediator' => env('FLIGHT_MEDIATOR', 'Médiation Tourisme et Voyage (MTV) — www.mtv.travel'),
