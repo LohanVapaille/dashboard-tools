@@ -21,7 +21,23 @@ class StayProviders
     /** @return BookableStayProvider[] */
     public function enabled(): array
     {
+        // Modèle partenaires : pas de vente par le site. Seul LiteAPI reste réservable, avec le module
+        // de paiement Nuitée intégré à la page (Nuitée encaisse), si LITEAPI_EMBEDDED_CHECKOUT est activé.
+        if (!config('commerce.direct_booking')) {
+            return LiteApiClient::embeddedCheckout() ? [$this->forKey('liteapi')] : [];
+        }
+
         return array_values(array_filter($this->providers, fn (BookableStayProvider $provider) => $provider->enabled()));
+    }
+
+    /** cart : panier + Stripe (vente directe) · embedded : paiement Nuitée dans la page · null : liens partenaires. */
+    public function checkoutMode(): ?string
+    {
+        if (!$this->anyEnabled()) {
+            return null;
+        }
+
+        return config('commerce.direct_booking') ? 'cart' : 'embedded';
     }
 
     public function anyEnabled(): bool

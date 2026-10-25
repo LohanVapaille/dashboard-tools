@@ -7,11 +7,17 @@ use App\Http\Middleware\CheckTripAccess;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
+        channels: __DIR__.'/../routes/channels.php',
         web: __DIR__ . '/../routes/web.php',
         commands: __DIR__ . '/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
+        // Derrière un hébergeur ou Cloudflare : faire confiance au proxy pour détecter le HTTPS (TRUSTED_PROXIES=*).
+        if ($proxies = env('TRUSTED_PROXIES')) {
+            $middleware->trustProxies(at: $proxies);
+        }
         $middleware->validateCsrfTokens(except: ['stripe/webhook', 'stripe/flights/webhook']);
 
         $middleware->web(append: [
@@ -22,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Enregistrement de l'alias du middleware ici :
         $middleware->alias([
             'check.trip.access' => CheckTripAccess::class,
+            'direct.booking' => \App\Http\Middleware\EnsureDirectBooking::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

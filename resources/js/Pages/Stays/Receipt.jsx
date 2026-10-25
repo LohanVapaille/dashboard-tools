@@ -37,7 +37,7 @@ function CancelDialog({ order, booking, onClose }) {
                     <button onClick={onClose} className="text-slate-400"><X className="h-5 w-5" /></button>
                 </div>
                 {booking.refund_if_cancelled > 0 ? (
-                    <p className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">L’hébergement vous rembourse <strong className="text-lg">{formatPrice(booking.refund_if_cancelled, order.currency)}</strong>. Les frais de service ne sont pas remboursés en cas d’annulation à votre initiative.</p>
+                    <p className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">L’hébergement vous rembourse <strong className="text-lg">{formatPrice(booking.refund_if_cancelled, order.currency)}</strong>.{order.fee_amount > 0 && " Les frais de service ne sont pas remboursés en cas d’annulation à votre initiative."}</p>
                 ) : (
                     <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">Selon les conditions de ce tarif, <strong>aucun remboursement</strong> n’est prévu si vous annulez maintenant.</p>
                 )}
@@ -150,11 +150,11 @@ export default function StayReceipt({ order: initialOrder, seller, feeLabel }) {
                             {order.bookings.map((booking) => (
                                 <div key={booking.id} className="flex justify-between gap-3"><dt className="text-slate-600 dark:text-slate-300">{booking.property.name}</dt><dd className="tabular-nums">{formatPrice(booking.stay_amount, order.currency)}</dd></div>
                             ))}
-                            <div className="flex justify-between gap-3"><dt className="text-slate-600 dark:text-slate-300">{feeLabel} ({formatPercent(order.fee_percent)})</dt><dd className="tabular-nums">{formatPrice(order.fee_amount, order.currency)}</dd></div>
+                            {order.fee_amount > 0 && <div className="flex justify-between gap-3"><dt className="text-slate-600 dark:text-slate-300">{feeLabel} ({formatPercent(order.fee_percent)})</dt><dd className="tabular-nums">{formatPrice(order.fee_amount, order.currency)}</dd></div>}
                             <div className="flex justify-between gap-3 border-t border-slate-200 pt-2 font-black dark:border-slate-700"><dt>Total payé</dt><dd className="tabular-nums text-emerald-600">{formatPrice(order.total_amount, order.currency)}</dd></div>
                             {order.refunded_amount > 0 && <div className="flex justify-between gap-3 text-emerald-600"><dt>Remboursé</dt><dd>− {formatPrice(order.refunded_amount, order.currency)}</dd></div>}
                         </dl>
-                        <p className="mt-3 text-[11px] text-slate-500">Payé le {order.paid_at ? new Date(order.paid_at).toLocaleString("fr-FR") : "—"} via Stripe. Prix des hébergements taxes incluses (hors taxe de séjour perçue sur place le cas échéant).</p>
+                        <p className="mt-3 text-[11px] text-slate-500">Payé le {order.paid_at ? new Date(order.paid_at).toLocaleString("fr-FR") : "—"} {order.payment_method === "liteapi_sdk" ? "à Nuitée (LiteAPI), vendeur de cette réservation, qui gère aussi les remboursements" : "via Stripe"}. Prix des hébergements taxes incluses (hors taxe de séjour perçue sur place le cas échéant).</p>
                     </div>
                     <div className="rounded-2xl border border-slate-200 bg-white p-5 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                         <h2 className="mb-3 text-sm font-black text-slate-900 dark:text-white">À votre arrivée</h2>

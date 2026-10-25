@@ -10,13 +10,13 @@ use Illuminate\Support\Str;
 class StayOrder extends Model
 {
     protected $fillable = [
-        'user_id', 'reference', 'status', 'currency', 'stays_amount', 'fee_percent', 'fee_amount',
+        'user_id', 'reference', 'status', 'payment_method', 'provider_transaction_id', 'currency', 'stays_amount', 'fee_percent', 'fee_amount',
         'total_amount', 'refunded_amount', 'guests', 'contact_email', 'contact_phone', 'special_requests',
         'stripe_checkout_session_id', 'stripe_payment_intent_id', 'stripe_receipt_url',
         'terms_accepted_at', 'paid_at', 'failure_reason',
     ];
 
-    protected $hidden = ['stripe_checkout_session_id', 'stripe_payment_intent_id'];
+    protected $hidden = ['stripe_checkout_session_id', 'stripe_payment_intent_id', 'provider_transaction_id'];
 
     protected function casts(): array
     {

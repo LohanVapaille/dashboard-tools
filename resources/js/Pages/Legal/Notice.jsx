@@ -7,7 +7,7 @@ const Row = ({ label, value }) => (
     </div>
 );
 
-export default function Notice({ legal, appUrl }) {
+export default function Notice({ legal, appUrl, directBooking }) {
     const incomplete = [legal.legal_form, legal.address, legal.siret, legal.director, legal.email, legal.host.name, legal.host.address].some((value) => !value);
 
     return (
@@ -32,17 +32,27 @@ export default function Notice({ legal, appUrl }) {
                 </dl>
             </LegalSection>
 
-            <LegalSection title="Activité d’intermédiaire de voyages">
-                <p>
-                    {legal.company} agit en tant qu’<strong>intermédiaire</strong> : il met en relation ses clients avec des compagnies aériennes et des établissements d’hébergement, et réserve en leur nom et pour leur compte les prestations choisies. Les prestations de transport et d’hébergement sont exécutées sous la seule responsabilité de ces prestataires.
-                </p>
-                <dl>
-                    <Row label="Immatriculation Atout France" value={legal.atout_france} />
-                    <Row label="Garantie financière" value={legal.financial_guarantee} />
-                    <Row label="Assurance responsabilité civile professionnelle" value={legal.insurance} />
-                </dl>
-                <p className="text-xs text-slate-500">La vente de services de voyage relève du Code du tourisme (articles L211-1 et suivants), qui prévoit une immatriculation au registre des opérateurs de voyages et de séjours tenu par Atout France.</p>
-            </LegalSection>
+            {directBooking ? (
+                <LegalSection title="Activité d’intermédiaire de voyages">
+                    <p>
+                        {legal.company} agit en tant qu’<strong>intermédiaire</strong> : il met en relation ses clients avec des compagnies aériennes et des établissements d’hébergement, et réserve en leur nom et pour leur compte les prestations choisies. Les prestations de transport et d’hébergement sont exécutées sous la seule responsabilité de ces prestataires.
+                    </p>
+                    <dl>
+                        <Row label="Immatriculation Atout France" value={legal.atout_france} />
+                        <Row label="Garantie financière" value={legal.financial_guarantee} />
+                        <Row label="Assurance responsabilité civile professionnelle" value={legal.insurance} />
+                    </dl>
+                    <p className="text-xs text-slate-500">La vente de services de voyage relève du Code du tourisme (articles L211-1 et suivants), qui prévoit une immatriculation au registre des opérateurs de voyages et de séjours tenu par Atout France.</p>
+                </LegalSection>
+            ) : (
+                <LegalSection title="Liens partenaires et affiliation">
+                    <p>
+                        {legal.company} est un service de planification de voyage. Il ne vend aucune prestation de transport, d’hébergement ou d’activité :
+                        les réservations sont conclues directement auprès de sites partenaires (Aviasales, Booking.com, Expedia, Airbnb, GetYourGuide, Viator…),
+                        qui en sont les vendeurs et les seuls responsables. {legal.company} peut percevoir une commission d’affiliation sur ces réservations, sans surcoût pour l’utilisateur.
+                    </p>
+                </LegalSection>
+            )}
 
             <LegalSection title="Hébergement du site">
                 <dl>
@@ -54,9 +64,10 @@ export default function Notice({ legal, appUrl }) {
 
             <LegalSection title="Prestataires techniques">
                 <ul className="list-disc space-y-1 pl-5">
-                    <li><strong>Stripe Payments Europe Ltd.</strong> (Irlande) — traitement sécurisé des paiements.</li>
-                    <li><strong>Duffel Technology Ltd.</strong> (Royaume-Uni) — réservation et émission des billets d’avion.</li>
-                    <li><strong>Nuitée / LiteAPI</strong> — réservation instantanée d’hôtels.</li>
+                    <li><strong>Stripe Payments Europe Ltd.</strong> (Irlande) — {directBooking ? "traitement sécurisé des paiements" : "paiement de l’abonnement Premium"}.</li>
+                    <li><strong>Duffel Technology Ltd.</strong> (Royaume-Uni) — {directBooking ? "réservation et émission des billets d’avion" : "recherche de vols"}.</li>
+                    {directBooking && <li><strong>Nuitée / LiteAPI</strong> — réservation instantanée d’hôtels.</li>}
+                    {!directBooking && <li><strong>Travelpayouts</strong> — réseau d’affiliation des liens partenaires.</li>}
                     <li><strong>OpenStreetMap</strong> (© contributeurs OpenStreetMap, licence ODbL) — cartes et annuaire des hébergements.</li>
                     <li><strong>GeoNames</strong> (geonames.org, licence CC BY 4.0) — grandes villes proposées pour une destination trop large.</li>
                 </ul>

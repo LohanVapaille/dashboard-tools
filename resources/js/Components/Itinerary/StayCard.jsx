@@ -1,10 +1,14 @@
 import React, { useState } from "react";
 import { router } from "@inertiajs/react";
-import { CalendarDays, ChevronDown, Edit3, MapPin, Moon, Trash2 } from "lucide-react";
+import { CalendarDays, ChevronDown, Edit3, MapPin, Moon, Ticket, Trash2 } from "lucide-react";
+import { usePage } from "@inertiajs/react";
+import { activityPartnerLinks } from "@/Utils/activities";
+import GetYourGuideWidget from "@/Components/Activities/GetYourGuideWidget";
 import DayCard from "./DayCard";
 import { formatDate } from "@/Utils/formatters";
 import { nightsBetween } from "@/Utils/stays";
 import { useTripPermissions } from "@/Contexts/TripPermissionsContext";
+import { confirmDialog } from "@/Components/ConfirmDialog";
 
 // Une couleur par étape, reprise dans la frise du programme.
 export const STAY_PALETTE = [
@@ -20,11 +24,14 @@ export default function StayCard({ stay, index = 0, onEdit }) {
     const [isOpen, setIsOpen] = useState(true);
     const color = STAY_PALETTE[index % STAY_PALETTE.length];
     const nights = nightsBetween(stay.arrival_date, stay.departure_date);
+    const city = stay.location_name.split(",")[0].trim();
+    const partners = usePage().props.commerce?.activities;
+    const [activitiesLink] = activityPartnerLinks(partners, city, stay.arrival_date);
     const activities = (stay.days || []).reduce((count, day) => count + (day.activities?.length || 0), 0);
 
-    const handleDeleteStay = () => {
+    const handleDeleteStay = async () => {
         if (!canEdit) return;
-        if (confirm(`Supprimer l’étape « ${stay.location_name} » et tout son programme ?`)) {
+        if (await confirmDialog({ title: "Supprimer cette étape ?", message: `« ${stay.location_name.split(",")[0]} », ses journées et toutes leurs activités seront supprimées définitivement.`, confirmLabel: "Supprimer l’étape" })) {
             router.delete(route("stays.destroy", stay.id));
         }
     };
@@ -53,6 +60,11 @@ export default function StayCard({ stay, index = 0, onEdit }) {
                 </div>
 
                 <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
+                    {activitiesLink && (
+                        <a href={activitiesLink.url} target="_blank" rel="noreferrer sponsored" title={`Visites et billets à ${city} sur ${activitiesLink.label}`} className="mr-1 inline-flex items-center gap-1.5 rounded-xl bg-white/20 px-3 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/30">
+                            <Ticket className="h-4 w-4" /> <span className="hidden sm:inline">Activités à {city}</span>
+                        </a>
+                    )}
                     {canEdit && (
                         <>
                             <button onClick={onEdit} className="rounded-xl p-2 text-white/80 transition hover:bg-white/20 hover:text-white" title="Modifier l’étape">
@@ -73,13 +85,12 @@ export default function StayCard({ stay, index = 0, onEdit }) {
                 <div className={`space-y-4 p-4 sm:p-5 ${color.soft}`}>
                     {stay.days?.length ? (
                         stay.days.map((day, dayIndex) => (
-                            <div key={day.id} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 dark:bg-slate-800 dark:ring-slate-700">
-                                <DayCard day={day} dayIndex={dayIndex} />
-                            </div>
+                            <DayCard key={day.id} day={day} dayIndex={dayIndex} defaultOpen={dayIndex === 0} />
                         ))
                     ) : (
                         <p className="py-6 text-center text-sm text-slate-400">Aucune journée pour cette étape.</p>
                     )}
+                    <GetYourGuideWidget partnerId={partners?.getyourguide_partner_id} query={city} />
                 </div>
             )}
         </section>

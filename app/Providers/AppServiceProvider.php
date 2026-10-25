@@ -28,6 +28,11 @@ class AppServiceProvider extends ServiceProvider
     {
         Vite::prefetch(concurrency: 3);
 
+        // En production, tous les liens générés (e-mails, redirections Stripe, partage) sont en HTTPS.
+        if ($this->app->isProduction()) {
+            \Illuminate\Support\Facades\URL::forceScheme('https');
+        }
+
         Gate::policy(Trip::class, TripPolicy::class);
 
         RateLimiter::for('ai-itinerary', function (Request $request) {

@@ -187,7 +187,7 @@ class OpenStreetMapStaysProvider
 
     private function userAgent(): string
     {
-        return config('app.name', 'TravelPlanner') . '/1.0 (' . config('app.url') . ')';
+        return config('app.name', 'LovaTrip') . '/1.0 (' . config('app.url') . ')';
     }
 
     private function normalize(array $element, StaySearchQuery $query): ?array

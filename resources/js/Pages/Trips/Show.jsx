@@ -38,6 +38,7 @@ import StaysTab from "@/Components/Itinerary/StaysTab";
 import PhotosTab from "@/Components/Itinerary/PhotosTab";
 import BudgetTab from "@/Components/Budget/BudgetTab";
 import DateRangePicker from "@/Components/DateRangePicker";
+import { notify } from "@/Components/ConfirmDialog";
 import ShareTripModal from "@/Components/Trips/ShareTripModal";
 import TripSettingsModal from "@/Components/Trips/TripSettingsModal";
 
@@ -109,9 +110,7 @@ function ShowContent({ trip }) {
     const handleCreateStay = (e) => {
         e.preventDefault();
         if (!locationData.latitude || !locationData.longitude) {
-            alert(
-                "Veuillez sélectionner un lieu valide dans la liste déroulante.",
-            );
+            notify({ title: "Choisissez un lieu dans la liste", message: "Tapez une ville ou une adresse, puis sélectionnez une des suggestions pour que le lieu soit placé sur la carte.", tone: "warning" });
             return;
         }
         router.post(
@@ -159,9 +158,7 @@ function ShowContent({ trip }) {
     const handleUpdateStay = (e) => {
         e.preventDefault();
         if (!editStayForm.data.latitude || !editStayForm.data.longitude) {
-            alert(
-                "Veuillez sélectionner un lieu valide dans la liste déroulante.",
-            );
+            notify({ title: "Choisissez un lieu dans la liste", message: "Tapez une ville ou une adresse, puis sélectionnez une des suggestions pour que le lieu soit placé sur la carte.", tone: "warning" });
             return;
         }
         editStayForm.put(route("stays.update", editingStay.id), {

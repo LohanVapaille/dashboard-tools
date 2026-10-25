@@ -1,18 +1,26 @@
-import { useForm } from "@inertiajs/react";
-import { CATEGORIES } from "@/Constants/itinerary";
-import DynamicIcon from "@/Components/Itinerary/DynamicIcon";
+import { useState } from "react";
+import axios from "axios";
+import { Clock3, Euro, Link2, LoaderCircle, MapPin } from "lucide-react";
+import { CATEGORY_STYLE, PERIOD_STYLE } from "@/Components/Itinerary/activityMeta";
+import { firstError } from "@/Utils/flights";
 
-// Formulaire d'ajout/édition d'une activité pour une période donnée d'un jour
-export default function ActivityForm({
-    dayId,
-    period,
-    activity = null,
-    onClose,
-    onUpdated,
-}) {
-    const { data, setData, post, patch, processing, errors } = useForm({
-        period,
-        category: activity?.category || "autre",
+const field = "w-full rounded-xl border-slate-300 text-sm focus:border-violet-500 focus:ring-violet-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white";
+
+const IconField = ({ icon: Icon, children }) => (
+    <label className="relative block">
+        <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        {children}
+    </label>
+);
+
+/**
+ * Ajout ou modification d'une activité. Enregistre directement (JSON) et renvoie l'activité
+ * à jour au parent, pour un affichage immédiat sans recharger la page.
+ */
+export default function ActivityForm({ dayId, period, activity = null, onSaved, onCancel }) {
+    const [data, setData] = useState({
+        period: activity?.period || period || "matin",
+        category: activity?.category || "visite",
         title: activity?.title || "",
         description: activity?.description || "",
         price: activity?.price ?? "",
@@ -20,127 +28,77 @@ export default function ActivityForm({
         source_url: activity?.source_url || "",
         start_time: activity?.start_time?.slice(0, 5) || "",
     });
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState("");
+    const set = (key) => (event) => setData((current) => ({ ...current, [key]: event.target.value }));
 
-    const submit = (e) => {
-        e.preventDefault();
-        if (activity) {
-            patch(route("activities.update", activity.id), {
-                onSuccess: () => {
-                    onUpdated?.({
-                        ...activity,
-                        ...data,
-                        price: data.price === "" ? null : data.price,
-                        source_url: data.source_url || null,
-                    });
-                    onClose?.();
-                },
-                preserveScroll: true,
-            });
-        } else {
-            post(route("activities.store", dayId), {
-                onSuccess: onClose,
-                preserveScroll: true,
-            });
+    const submit = async (event) => {
+        event.preventDefault();
+        setSaving(true);
+        setError("");
+        const payload = { ...data, price: data.price === "" ? null : data.price, source_url: data.source_url || null, start_time: data.start_time || null };
+        try {
+            const { data: saved } = activity
+                ? await axios.put(route("activities.update", activity.id), payload, { headers: { Accept: "application/json" } })
+                : await axios.post(route("activities.store", dayId), payload);
+            onSaved?.({ ...activity, ...saved });
+        } catch (failure) {
+            setError(firstError(failure, "L’activité n’a pas pu être enregistrée."));
+            setSaving(false);
         }
     };
 
     return (
-        <form
-            onSubmit={submit}
-            className="space-y-2 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700"
-        >
-            <div className="flex flex-wrap gap-1">
-                {CATEGORIES.map((cat) => (
-                    <button
-                        key={cat.key}
-                        type="button"
-                        onClick={() => setData("category", cat.key)}
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs border transition ${
-                            data.category === cat.key
-                                ? "bg-blue-600 text-white border-blue-600"
-                                : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700"
-                        }`}
-                    >
-                        <DynamicIcon name={cat.icon} className="w-3.5 h-3.5" />
-                        {cat.label}
-                    </button>
-                ))}
+        <form onSubmit={submit} className="space-y-4">
+            <div>
+                <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">Type</p>
+                <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(CATEGORY_STYLE).map(([key, style]) => (
+                        <button
+                            key={key}
+                            type="button"
+                            onClick={() => setData((current) => ({ ...current, category: key }))}
+                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ring-1 transition ${data.category === key ? "bg-slate-900 text-white ring-slate-900 dark:bg-white dark:text-slate-900" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"}`}
+                        >
+                            <style.Icon className="h-3.5 w-3.5" /> {style.label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
-            <input
-                type="text"
-                placeholder="Titre (ex: Visite du musée)"
-                value={data.title}
-                onChange={(e) => setData("title", e.target.value)}
-                className="w-full text-sm rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                required
-            />
-            {errors.title && (
-                <div className="text-red-500 text-xs">{errors.title}</div>
-            )}
-            {Object.entries(errors)
-                .filter(([field]) => field !== "title")
-                .map(([field, message]) => (
-                    <div key={field} className="text-red-500 text-xs">
-                        {message}
-                    </div>
-                ))}
+            <input autoFocus required maxLength={191} placeholder="Nom de l’activité (ex. Musée national)" value={data.title} onChange={set("title")} className={`${field} text-base font-semibold`} />
 
-            <div className="grid grid-cols-3 gap-2">
-                <input
-                    type="time"
-                    value={data.start_time}
-                    onChange={(e) => setData("start_time", e.target.value)}
-                    className="text-sm rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                />
-                <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="Prix / pers. (€)"
-                    value={data.price}
-                    onChange={(e) => setData("price", e.target.value)}
-                    className="text-sm rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                />
-                <input
-                    type="text"
-                    placeholder="Lieu"
-                    value={data.location_name}
-                    onChange={(e) => setData("location_name", e.target.value)}
-                    className="text-sm rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                />
+            <div>
+                <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">Moment de la journée</p>
+                <div className="grid grid-cols-5 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+                    {PERIOD_STYLE.map(({ key, label, Icon, tint }) => (
+                        <button
+                            key={key}
+                            type="button"
+                            onClick={() => setData((current) => ({ ...current, period: key }))}
+                            className={`flex flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-bold transition ${data.period === key ? "bg-white text-slate-900 shadow dark:bg-slate-700 dark:text-white" : "text-slate-500"}`}
+                        >
+                            <Icon className={`h-4 w-4 ${tint}`} /> <span className="truncate">{label}</span>
+                        </button>
+                    ))}
+                </div>
             </div>
 
-            <input
-                type="url"
-                placeholder="Lien du site ou de la réservation (facultatif)"
-                value={data.source_url}
-                onChange={(e) => setData("source_url", e.target.value)}
-                className="w-full text-sm rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-            />
+            <div className="grid gap-3 sm:grid-cols-3">
+                <IconField icon={Clock3}><input type="time" value={data.start_time} onChange={set("start_time")} className={`${field} pl-9`} /></IconField>
+                <IconField icon={Euro}><input type="number" step="0.01" min="0" placeholder="Prix / pers." value={data.price} onChange={set("price")} className={`${field} pl-9`} /></IconField>
+                <IconField icon={MapPin}><input placeholder="Lieu" value={data.location_name} onChange={set("location_name")} className={`${field} pl-9`} /></IconField>
+            </div>
 
-            <textarea
-                placeholder="Informations complémentaires (adresse, réservation, contact...)"
-                value={data.description}
-                onChange={(e) => setData("description", e.target.value)}
-                rows="2"
-                className="w-full text-sm rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-            />
+            <textarea rows={3} placeholder="Infos utiles : adresse, horaires, conseils…" value={data.description} onChange={set("description")} className={field} />
+            <IconField icon={Link2}><input type="url" placeholder="Lien du site ou de la réservation (facultatif)" value={data.source_url} onChange={set("source_url")} className={`${field} pl-9`} /></IconField>
 
-            <div className="flex justify-end gap-2">
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="text-xs px-3 py-1.5 text-gray-500 hover:text-gray-700"
-                >
-                    Annuler
-                </button>
-                <button
-                    type="submit"
-                    disabled={processing}
-                    className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-                >
-                    {activity ? "Mettre à jour" : "Ajouter"}
+            {error && <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">{error}</p>}
+
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button type="button" onClick={onCancel} className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">Annuler</button>
+                <button disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-500/30 disabled:opacity-50">
+                    {saving && <LoaderCircle className="h-4 w-4 animate-spin" />} {activity ? "Enregistrer" : "Ajouter l’activité"}
                 </button>
             </div>
         </form>

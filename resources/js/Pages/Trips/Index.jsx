@@ -14,6 +14,7 @@ import {
     LogOut,
     ArrowUpDown,
 } from "lucide-react";
+import { confirmDialog } from "@/Components/ConfirmDialog";
 
 function formatDate(value) {
     if (!value) return "";
@@ -115,14 +116,14 @@ export default function Index({ ownedTrips = [], joinedTrips = [], guestTripsRem
     const sortedOwned = useMemo(() => sortTrips(ownedTrips, sortBy), [ownedTrips, sortBy]);
     const sortedJoined = useMemo(() => sortTrips(joinedTrips, sortBy), [joinedTrips, sortBy]);
 
-    const destroy = (trip) => {
-        if (confirm(`Supprimer le voyage "${trip.title}" ?`)) {
+    const destroy = async (trip) => {
+        if (await confirmDialog({ title: "Supprimer ce voyage ?", message: `« ${trip.title} », son programme, ses photos et ses accès seront supprimés définitivement.`, confirmLabel: "Supprimer" })) {
             router.delete(route("trips.destroy", trip.id));
         }
     };
 
-    const leave = (trip) => {
-        if (confirm(`Quitter le voyage "${trip.title}" ? Vous perdrez l'accès.`)) {
+    const leave = async (trip) => {
+        if (await confirmDialog({ title: "Quitter ce voyage ?", message: `Vous n’aurez plus accès à « ${trip.title} », sauf nouvelle invitation.`, confirmLabel: "Quitter", tone: "warning" })) {
             router.delete(route("trips.leave", trip.id));
         }
     };

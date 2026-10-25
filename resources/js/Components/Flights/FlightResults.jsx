@@ -42,7 +42,38 @@ export function ResultsSkeleton() {
     );
 }
 
-export default function FlightResults({ result, onSelect, actionLabel }) {
+/** Meilleur prix Aviasales de chaque jour du mois : un clic relance la recherche à cette date. */
+function PriceCalendar({ calendar, date, onDateChange }) {
+    if (!calendar?.length) return null;
+    const cheapest = Math.min(...calendar.map((day) => day.price));
+
+    return (
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+            <p className="mb-2 px-1 text-xs font-bold uppercase tracking-wide text-slate-500">Meilleurs prix constatés sur Aviasales ce mois-ci · par personne</p>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+                {calendar.map((day) => {
+                    const active = day.date === date;
+                    const low = day.price === cheapest;
+                    const label = new Date(`${day.date}T12:00:00`);
+                    return (
+                        <button
+                            key={day.date}
+                            type="button"
+                            onClick={() => !active && onDateChange?.(day.date)}
+                            className={`flex w-[4.75rem] shrink-0 flex-col items-center rounded-xl px-2 py-2 text-center ring-1 transition ${active ? "bg-indigo-600 text-white ring-indigo-600" : low ? "bg-emerald-50 text-emerald-800 ring-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-200 dark:ring-emerald-900" : "bg-white text-slate-700 ring-slate-200 hover:bg-indigo-50 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"}`}
+                        >
+                            <span className={`text-[10px] font-bold uppercase ${active ? "text-indigo-100" : "text-slate-400"}`}>{label.toLocaleDateString("fr-FR", { weekday: "short" })}</span>
+                            <span className="text-sm font-black">{label.getDate()} {label.toLocaleDateString("fr-FR", { month: "short" }).replace(".", "")}</span>
+                            <span className="text-xs font-bold">{formatPrice(day.price, day.currency)}</span>
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+export default function FlightResults({ result, onSelect, actionLabel, onPartner, date, onDateChange, onSearchAll }) {
     const [airline, setAirline] = useState("all");
     const [stops, setStops] = useState("all");
     const [slot, setSlot] = useState("all");
@@ -51,8 +82,12 @@ export default function FlightResults({ result, onSelect, actionLabel }) {
     const [toggles, setToggles] = useState({ checked: false, carryOn: false, refundable: false });
 
     const offers = result?.offers || [];
-    const bookable = offers.filter((offer) => offer.bookable);
-    const partners = offers.filter((offer) => !offer.bookable);
+    // Offres détaillées (réservables ici ou chez le partenaire) ; les prix indicatifs du comparateur à part.
+    // Sans offre détaillée (mode partenaires), les vols Aviasales constituent la liste principale.
+    const detailed = offers.filter((offer) => offer.bookable || offer.provider !== "travelpayouts");
+    const bookable = detailed.length ? detailed : offers;
+    const partners = detailed.length ? offers.filter((offer) => !offer.bookable && offer.provider === "travelpayouts") : [];
+    const viaPartner = bookable.length > 0 && bookable.every((offer) => !offer.bookable);
     const airlines = useMemo(() => [...new Set(bookable.map((offer) => offer.airline?.name))].sort(), [bookable]);
     const priceBounds = useMemo(() => {
         const prices = bookable.map((offer) => offer.total_amount);
@@ -95,8 +130,29 @@ export default function FlightResults({ result, onSelect, actionLabel }) {
         setVisible(10);
     };
 
+    const aviasalesButton = result.aviasales_url && (
+        <button
+            type="button"
+            onClick={() => onSearchAll?.(result.aviasales_url)}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-rose-500 px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-orange-500/20 transition hover:from-orange-600 hover:to-rose-600"
+        >
+            Voir tous les vols du jour sur Aviasales <ExternalLink className="h-4 w-4" />
+        </button>
+    );
+
     return (
         <div className="space-y-4">
+            <PriceCalendar calendar={result.calendar} date={date} onDateChange={onDateChange} />
+
+            {viaPartner && result.aviasales_url && (
+                <div className="flex flex-col gap-3 rounded-2xl border border-orange-200 bg-orange-50/60 p-4 dark:border-orange-900/60 dark:bg-orange-950/20 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-slate-700 dark:text-slate-200">
+                        <strong>Prix constatés récemment sur Aviasales.</strong> Le tarif exact, en temps réel, s’affiche sur Aviasales au moment de réserver.
+                    </p>
+                    {aviasalesButton}
+                </div>
+            )}
+
             {result.warnings?.length > 0 && (
                 <p className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
                     <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" /> {result.warnings.join(" · ")}
@@ -105,7 +161,7 @@ export default function FlightResults({ result, onSelect, actionLabel }) {
 
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-slate-600 dark:text-slate-300">
-                    <span className="text-lg font-black text-slate-900 dark:text-white">{filtered.length}</span> vol{filtered.length > 1 ? "s" : ""} réservable{filtered.length > 1 ? "s" : ""}
+                    <span className="text-lg font-black text-slate-900 dark:text-white">{filtered.length}</span> vol{filtered.length > 1 ? "s" : ""} {viaPartner ? "trouvé" : "réservable"}{filtered.length > 1 ? "s" : ""}
                     {result.providers?.length > 0 && (
                         <span className="ml-2 text-xs text-slate-400">via {result.providers.map((provider) => provider.label).join(", ")}</span>
                     )}
@@ -169,17 +225,27 @@ export default function FlightResults({ result, onSelect, actionLabel }) {
                 )}
             </div>
 
+            {viaPartner && (
+                <p className="rounded-xl bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:bg-sky-950/30 dark:text-sky-200">
+                    Les billets s’achètent chez notre partenaire Aviasales, qui vous redirige vers la compagnie ou l’agence vendeuse : c’est elle qui
+                    encaisse le paiement et gère changements et annulations. Prix indicatifs, confirmés sur le site du vendeur. Nous pouvons percevoir une commission, sans surcoût pour vous.
+                </p>
+            )}
+
             {filtered.slice(0, visible).map((offer) => (
-                <FlightOfferCard key={offer.id} offer={offer} onSelect={onSelect} actionLabel={actionLabel} highlight={highlightFor(offer)} />
+                <FlightOfferCard key={offer.id} offer={offer} onSelect={onSelect} onPartner={onPartner} actionLabel={actionLabel} highlight={highlightFor(offer)} />
             ))}
 
             {!filtered.length && (
                 <div className="rounded-2xl border-2 border-dashed border-slate-200 p-8 text-center dark:border-slate-700">
                     <Plane className="mx-auto h-8 w-8 text-slate-300" />
                     <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
-                        {bookable.length ? "Aucun vol ne correspond à ces filtres." : "Aucun vol réservable trouvé pour cette date."}
+                        {bookable.length ? "Aucun vol ne correspond à ces filtres." : result.aviasales_url ? "Aucun prix récent pour ce jour sur Aviasales." : "Aucun vol réservable trouvé pour cette date."}
                     </p>
-                    <p className="mt-1 text-xs text-slate-400">Essayez un autre aéroport proche ou une date voisine.</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                        {result.calendar?.length ? "Choisissez un jour dans le calendrier ci-dessus, ou consultez tous les vols du jour en direct." : "Essayez un autre aéroport proche ou une date voisine."}
+                    </p>
+                    {!bookable.length && aviasalesButton && <div className="mt-4">{aviasalesButton}</div>}
                 </div>
             )}
 
@@ -197,7 +263,7 @@ export default function FlightResults({ result, onSelect, actionLabel }) {
                     </summary>
                     <p className="mt-2 text-xs text-slate-500">Prix observés récemment, à confirmer et à réserver sur le site du partenaire. Ces vols ne peuvent pas être ajoutés au panier.</p>
                     <div className="mt-3 space-y-3">
-                        {partners.slice(0, 10).map((offer) => <FlightOfferCard key={offer.id} offer={offer} />)}
+                        {partners.slice(0, 10).map((offer) => <FlightOfferCard key={offer.id} offer={offer} onPartner={onPartner} />)}
                     </div>
                 </details>
             )}

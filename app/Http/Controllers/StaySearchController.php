@@ -6,12 +6,14 @@ use App\Models\Trip;
 use App\Services\Flights\FlightProviderException;
 use App\Services\Stays\Providers\DuffelStaysProvider;
 use App\Services\Stays\Providers\OpenStreetMapStaysProvider;
+use App\Services\Stays\LiteApiClient;
 use App\Services\Stays\StayPricing;
 use App\Services\Stays\StaySearchQuery;
 use App\Services\Stays\StayProviders;
 use App\Services\Stays\StaySearchService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
@@ -22,8 +24,15 @@ class StaySearchController extends Controller
     {
         Gate::authorize('view', $trip);
 
+        $offers = $search->offers($this->query($request));
+        if (self::membersOnly($request)) {
+            $offers['properties'] = array_map(fn (array $property) => str_starts_with($property['id'], 'lite_')
+                ? ['price' => null, 'members_only' => true] + $property
+                : $property, $offers['properties'] ?? []);
+        }
+
         return response()->json([
-            ...$search->offers($this->query($request)),
+            ...$offers,
             'types' => OpenStreetMapStaysProvider::TYPES,
             'boards' => DuffelStaysProvider::BOARDS,
             'pricing' => [
@@ -84,12 +93,67 @@ class StaySearchController extends Controller
     {
         abort_unless(preg_match('/^(srr|lite)_[A-Za-z0-9_-]+$/', $searchResultId), 404);
 
+        if (self::membersOnly($request) && str_starts_with($searchResultId, 'lite_')) {
+            return response()->json(['members_only' => true, 'rooms' => []]);
+        }
+
         try {
             $context = $request->has('check_in') ? $this->query($request) : null;
 
-            return response()->json($providers->forProperty($searchResultId)->rates($searchResultId, $context));
+            $details = $providers->forProperty($searchResultId)->rates($searchResultId, $context);
+            self::rememberRates($searchResultId, $details);
+
+            return response()->json($details);
         } catch (FlightProviderException $exception) {
             throw ValidationException::withMessages(['rates' => $exception->getMessage()]);
         }
+    }
+
+    /**
+     * Garde côté serveur les offres affichées : certains fournisseurs (LiteAPI) changent l'identifiant
+     * de chaque offre à chaque recherche, l'ajout au panier doit donc reprendre exactement celle vue.
+     */
+    public static function rememberRates(string $searchResultId, array $details): void
+    {
+        foreach ($details['rooms'] ?? [] as $room) {
+            foreach ($room['rates'] ?? [] as $rate) {
+                Cache::put(self::rateCacheKey($searchResultId, (string) $rate['id']), [
+                    'property' => $details['property'],
+                    'room' => $room,
+                    'rate' => $rate,
+                ], now()->addMinutes((int) config('stays.cart_ttl_minutes', 30)));
+            }
+        }
+    }
+
+    /** Toutes les photos d'un hôtel de l'annuaire LiteAPI (galerie de la fiche), mises en cache un jour. */
+    public function photos(string $hotelId, LiteApiClient $client)
+    {
+        abort_unless(preg_match('/^[a-z]{1,4}[A-Za-z0-9]{2,20}$/', $hotelId), 404);
+
+        $hotel = rescue(fn () => $client->hotel($hotelId), [], false);
+        $photos = collect($hotel['hotelImages'] ?? [])
+            ->sortByDesc(fn ($image) => (int) ($image['defaultImage'] ?? false))
+            ->map(fn ($image) => ['url' => $image['urlHd'] ?? $image['url'] ?? null, 'caption' => $image['caption'] ?? null])
+            ->filter(fn ($image) => $image['url'])
+            ->unique('url')
+            ->take(40)
+            ->values();
+
+        return response()->json(['photos' => $photos]);
+    }
+
+    /**
+     * Tarifs Nuitée en mode partenaires : souvent inférieurs au prix conseillé par l'hôtel, ils ne peuvent
+     * être montrés qu'à un groupe fermé (membres connectés), sous peine de violation de parité tarifaire.
+     */
+    private static function membersOnly(Request $request): bool
+    {
+        return LiteApiClient::embeddedCheckout() && !$request->user();
+    }
+
+    public static function rateCacheKey(string $searchResultId, string $rateId): string
+    {
+        return 'stay-rate:' . sha1($searchResultId . '|' . $rateId);
     }
 }

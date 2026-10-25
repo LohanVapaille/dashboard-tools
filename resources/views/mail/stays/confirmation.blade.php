@@ -2,6 +2,10 @@
 # Votre hébergement vous attend
 
 Votre paiement est confirmé. Voici le récapitulatif de la commande **{{ $order->reference }}**.
+@if ($order->payment_method === 'liteapi_sdk')
+
+Cette réservation est vendue et encaissée par **Nuitée (LiteAPI)**, qui gère aussi les remboursements en cas d’annulation.
+@endif
 
 @foreach ($order->bookings as $booking)
 ## {{ $booking->property['name'] ?? 'Hébergement' }}
@@ -25,7 +29,9 @@ Votre paiement est confirmé. Voici le récapitulatif de la commande **{{ $order
 | Détail | Montant |
 |:--|--:|
 | Hébergements (taxes incluses) | {{ number_format($order->stays_amount, 2, ',', ' ') }} {{ $order->currency }} |
+@if ($order->fee_amount > 0)
 | {{ $feeLabel }} ({{ rtrim(rtrim(number_format($order->fee_percent, 2, ',', ''), '0'), ',') }} %) | {{ number_format($order->fee_amount, 2, ',', ' ') }} {{ $order->currency }} |
+@endif
 | **Total payé** | **{{ number_format($order->total_amount, 2, ',', ' ') }} {{ $order->currency }}** |
 </x-mail::table>
 

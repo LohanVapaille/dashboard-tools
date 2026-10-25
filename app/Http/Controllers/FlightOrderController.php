@@ -33,7 +33,20 @@ class FlightOrderController extends Controller
             ->get()
             ->map(fn (\App\Models\StayOrder $order) => StayOrderController::present($order));
 
-        return Inertia::render('Reservations/Index', ['flightOrders' => $orders, 'stayOrders' => $stayOrders]);
+        $user = $request->user();
+        $partnerReservations = \App\Models\TripReservation::with('trip:id,title')
+            ->where(fn ($query) => $query->where('user_id', $user->id)->orWhereHas('trip', fn ($trip) => $trip->where('user_id', $user->id)))
+            // Les hôtels payés dans le module Nuitée figurent déjà dans les commandes d'hébergement.
+            ->where(fn ($query) => $query->whereNull('details')->orWhereNull('details->stay_order'))
+            ->orderByRaw('starts_at is null')
+            ->orderBy('starts_at')
+            ->get();
+
+        return Inertia::render('Reservations/Index', [
+            'flightOrders' => $orders,
+            'stayOrders' => $stayOrders,
+            'partnerReservations' => $partnerReservations,
+        ]);
     }
 
     public function show(Request $request, FlightOrder $order)

@@ -1,7 +1,7 @@
 import LegalShell, { LegalSection, Value } from "@/Components/LegalShell";
 import { openCookieSettings } from "@/Utils/consent";
 
-export default function Privacy({ legal, sessionCookie, sessionMinutes, affiliateEnabled }) {
+export default function Privacy({ legal, sessionCookie, sessionMinutes, affiliateEnabled, activitiesWidget, embeddedHotels }) {
     const cookies = [
         [sessionCookie, "Maintien de votre session (connexion, panier)", `${sessionMinutes} min d’inactivité`, "Nécessaire"],
         ["XSRF-TOKEN", "Protection des formulaires contre la falsification de requêtes", "Durée de la session", "Nécessaire"],
@@ -11,6 +11,7 @@ export default function Privacy({ legal, sessionCookie, sessionMinutes, affiliat
         ["tp_consent", "Mémorisation de vos choix sur les cookies", "6 mois", "Nécessaire"],
         ["Stockage local « flights.home »", "Mémorise votre aéroport de départ habituel", "Jusqu’à effacement du navigateur", "Nécessaire (préférence)"],
         ...(affiliateEnabled ? [["Cookies Travelpayouts (tpembars.com)", "Affiliation : nous rémunérer quand vous réservez chez un partenaire", "Fixée par Travelpayouts", "Soumis à consentement"]] : []),
+        ...(activitiesWidget ? [["Cookies GetYourGuide (widget d’activités)", "Afficher les activités de la ville et nous rémunérer si vous en réservez une", "Fixée par GetYourGuide", "Soumis à consentement"]] : []),
     ];
 
     return (
@@ -31,6 +32,7 @@ export default function Privacy({ legal, sessionCookie, sessionMinutes, affiliat
                             <tr><td className="p-2">Invités : identifiant d’appareil, pseudo</td><td className="p-2">Accès sans compte à un voyage partagé</td><td className="p-2">Intérêt légitime</td><td className="p-2">1 an</td></tr>
                             <tr><td className="p-2">Réservations : identité, date de naissance, e-mail, téléphone des voyageurs</td><td className="p-2">Transmission aux compagnies et hébergements, gestion de la réservation</td><td className="p-2">Contrat</td><td className="p-2">Durée de la réservation, puis 5 ans (prescription)</td></tr>
                             <tr><td className="p-2">Paiements : montant, référence Stripe (jamais vos données de carte)</td><td className="p-2">Facturation, remboursements, lutte contre la fraude</td><td className="p-2">Obligation légale</td><td className="p-2">10 ans (pièces comptables)</td></tr>
+                            <tr><td className="p-2">Assistance : prénom, e-mail, motif et messages du chat</td><td className="p-2">Répondre à vos questions et suivre votre demande (copie des réponses par e-mail)</td><td className="p-2">Intérêt légitime / contrat</td><td className="p-2">3 ans après le dernier échange</td></tr>
                             <tr><td className="p-2">Position géographique (si vous l’autorisez)</td><td className="p-2">Proposer l’aéroport le plus proche — calculée sur l’instant, non conservée</td><td className="p-2">Consentement (autorisation du navigateur)</td><td className="p-2">Non conservée</td></tr>
                         </tbody>
                     </table>
@@ -59,7 +61,7 @@ export default function Privacy({ legal, sessionCookie, sessionMinutes, affiliat
                         </tbody>
                     </table>
                 </div>
-                <p>Services tiers sans cookie sur notre domaine : les cartes (OpenStreetMap), les logos de compagnies et les photos d’hôtels sont chargés depuis les serveurs de leurs fournisseurs, qui reçoivent votre adresse IP. La page de paiement est hébergée par Stripe, qui y dépose ses propres cookies de sécurité anti-fraude.</p>
+                <p>Services tiers sans cookie sur notre domaine : les cartes (OpenStreetMap), les logos de compagnies et les photos d’hôtels sont chargés depuis les serveurs de leurs fournisseurs, qui reçoivent votre adresse IP. La page de paiement est hébergée par Stripe, qui y dépose ses propres cookies de sécurité anti-fraude.{embeddedHotels && " Le module de paiement des hôtels est fourni par Nuitée (LiteAPI) et son prestataire de paiement, qui reçoivent directement vos données bancaires et déposent leurs cookies de sécurité ; nous n’y avons pas accès."} Les sites partenaires ouverts depuis le site (Aviasales, Booking.com, Omio…) appliquent leur propre politique de cookies.</p>
                 <button type="button" onClick={openCookieSettings} className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">Modifier mes choix sur les cookies</button>
             </LegalSection>
         </LegalShell>

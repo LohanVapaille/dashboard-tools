@@ -3,6 +3,11 @@
 namespace App\Services\Budget;
 
 use App\Models\FlightBooking;
+use App\Models\TripBudgetLine;
+use App\Models\TripReservation;
+use App\Services\Flights\AirportDirectory;
+use App\Services\Flights\FlightSearchQuery;
+use App\Services\Flights\Providers\TravelpayoutsProvider;
 use App\Models\StayBooking;
 use App\Models\Trip;
 use App\Models\TripBudgetMember;
@@ -36,10 +41,14 @@ class TripBudget
 
         return [
             'currency' => 'EUR',
+            'premium' => $this->trip->hasPremium(auth()->user()),
+            'expense_limit' => $this->trip->hasPremium(auth()->user()) ? null : Trip::FREE_EXPENSE_LIMIT,
             'travelers' => $this->travelers(),
             'target' => $this->trip->budget_target === null ? null : (float) $this->trip->budget_target,
             'planned' => $planned,
             'planned_total' => round(array_sum(array_column($planned, 'amount')), 2),
+            'paid_total' => round(array_sum(array_map(fn ($line) => $line['paid'] ? $line['amount'] : 0, $planned)), 2),
+            'hidden_lines' => $this->hiddenCount(),
             'spent_total' => round($this->trip->expenses->sum(fn ($expense) => (float) $expense->amount), 2),
             'members' => $members->map(fn (TripBudgetMember $member) => [
                 'id' => $member->id,
@@ -55,6 +64,7 @@ class TripBudget
                 'category' => $expense->category,
                 'amount' => (float) $expense->amount,
                 'split_mode' => $expense->split_mode,
+                'planned_key' => $expense->planned_key,
                 'spent_on' => $expense->spent_on?->toDateString(),
                 'paid_by' => $expense->paid_by,
                 'shares' => $expense->shares->map(fn ($share) => [
@@ -66,28 +76,45 @@ class TripBudget
         ];
     }
 
-    /** Lignes du prévisionnel : les activités sont saisies par personne, le reste pour tout le groupe. */
+    /**
+     * Lignes du prévisionnel. Activités saisies par personne, le reste pour tout le groupe.
+     * Les réservations réelles remplacent l'estimation correspondante (logement, vols) ; chaque
+     * ligne peut être masquée, et des lignes libres peuvent être ajoutées.
+     */
     private function planned(): array
     {
         $travelers = $this->travelers();
+        $settings = TripBudgetLine::where('trip_id', $this->trip->id)->get();
+        $byKey = $settings->whereNotNull('key')->keyBy('key');
+        $reservations = $this->trip->reservations()->get()
+            // Les hôtels payés dans le module Nuitée sont déjà comptés via leur commande.
+            ->reject(fn (TripReservation $reservation) => !empty($reservation->details['stay_order']));
+        $stayBookings = StayBooking::where('trip_id', $this->trip->id)->where('status', 'confirmed')->get();
         $lines = [];
 
         foreach ($this->trip->stays as $stay) {
             $city = trim(explode(',', $stay->location_name)[0]);
+            $from = Carbon::parse($stay->arrival_date)->toDateString();
+            $to = Carbon::parse($stay->departure_date)->toDateString();
+            $booked = $reservations->contains(fn ($reservation) => $reservation->kind === 'stay' && $reservation->starts_at && $reservation->starts_at->toDateString() >= $from && $reservation->starts_at->toDateString() < $to)
+                || $stayBookings->contains(fn ($booking) => $booking->check_in->toDateString() >= $from && $booking->check_in->toDateString() < $to);
 
-            $lines[] = [
-                'key' => 'stay-' . $stay->id,
-                'type' => 'stay',
-                'id' => $stay->id,
-                'group' => 'logement',
-                'label' => 'Logement à ' . $city,
-                'detail' => Carbon::parse($stay->arrival_date)->diffInDays(Carbon::parse($stay->departure_date)) . ' nuit(s)',
-                'date' => Carbon::parse($stay->arrival_date)->toDateString(),
-                'unit_price' => $stay->accommodation_cost === null ? null : (float) $stay->accommodation_cost,
-                'per_person' => false,
-                'amount' => (float) ($stay->accommodation_cost ?? 0),
-                'editable' => true,
-            ];
+            // Logement déjà réservé : son prix réel figure plus bas, l'estimation disparaît.
+            if (!$booked) {
+                $lines[] = [
+                    'key' => 'stay-' . $stay->id,
+                    'type' => 'stay',
+                    'id' => $stay->id,
+                    'group' => 'logement',
+                    'label' => 'Logement à ' . $city,
+                    'detail' => Carbon::parse($stay->arrival_date)->diffInDays(Carbon::parse($stay->departure_date)) . ' nuit(s) · estimation',
+                    'date' => $from,
+                    'unit_price' => $stay->accommodation_cost === null ? null : (float) $stay->accommodation_cost,
+                    'per_person' => false,
+                    'amount' => (float) ($stay->accommodation_cost ?? 0),
+                    'editable' => true,
+                ];
+            }
 
             foreach ($stay->days as $day) {
                 foreach ($day->activities as $activity) {
@@ -118,12 +145,36 @@ class TripBudget
                 'id' => $transition->id,
                 'group' => 'transport',
                 'label' => 'Trajet ' . $from . ' → ' . $to,
-                'detail' => $transition->transport_mode,
-                'date' => null,
+                'detail' => trim(implode(' · ', array_filter([$transition->transport_mode, $transition->carrier, $transition->service_number, $transition->reference]))),
+                'date' => $transition->departure_at ? Carbon::parse($transition->departure_at)->toDateString() : null,
                 'unit_price' => $transition->cost === null ? null : (float) $transition->cost,
                 'per_person' => false,
                 'amount' => (float) ($transition->cost ?? 0),
                 'editable' => true,
+            ];
+        }
+
+        array_push($lines, ...$this->flightEstimates($reservations, $byKey, $travelers));
+
+        // Réservations faites chez les partenaires : montant réel, modifiable depuis la réservation.
+        foreach ($reservations->whereNotNull('price') as $reservation) {
+            $lines[] = [
+                'key' => 'reservation-' . $reservation->id,
+                'type' => 'reservation',
+                'id' => $reservation->id,
+                'group' => match ($reservation->kind) {
+                    'stay' => 'logement',
+                    'activity' => 'activites',
+                    'other' => 'autre',
+                    default => 'transport',
+                },
+                'label' => $reservation->title,
+                'detail' => 'Réservé' . ($reservation->provider ? ' sur ' . $reservation->provider : '') . ($reservation->reference ? ' · ' . $reservation->reference : ''),
+                'date' => $reservation->starts_at?->toDateString(),
+                'unit_price' => (float) $reservation->price,
+                'per_person' => false,
+                'amount' => (float) $reservation->price,
+                'editable' => false,
             ];
         }
 
@@ -145,22 +196,131 @@ class TripBudget
                 ];
             });
 
-        StayBooking::where('trip_id', $this->trip->id)->where('status', 'confirmed')->get()
-            ->each(function (StayBooking $booking) use (&$lines) {
-                $lines[] = [
-                    'key' => 'stay-booking-' . $booking->id,
-                    'type' => 'booking',
-                    'id' => $booking->id,
-                    'group' => 'logement',
-                    'label' => $booking->property['name'] ?? 'Hébergement réservé',
-                    'detail' => 'Réservé',
-                    'date' => $booking->check_in?->toDateString(),
-                    'unit_price' => (float) $booking->total_amount,
-                    'per_person' => false,
-                    'amount' => (float) $booking->total_amount,
-                    'editable' => false,
+        foreach ($stayBookings as $booking) {
+            $lines[] = [
+                'key' => 'stay-booking-' . $booking->id,
+                'type' => 'booking',
+                'id' => $booking->id,
+                'group' => 'logement',
+                'label' => $booking->property['name'] ?? 'Hébergement réservé',
+                'detail' => 'Réservé',
+                'date' => $booking->check_in?->toDateString(),
+                'unit_price' => (float) $booking->total_amount,
+                'per_person' => false,
+                'amount' => (float) $booking->total_amount,
+                'editable' => false,
+            ];
+        }
+
+        // Lignes ajoutées à la main.
+        foreach ($settings->whereNull('key') as $custom) {
+            $lines[] = [
+                'key' => 'custom-' . $custom->id,
+                'type' => 'custom',
+                'id' => $custom->id,
+                'group' => $custom->group,
+                'label' => $custom->label,
+                'detail' => 'Ajouté à la main',
+                'date' => null,
+                'unit_price' => $custom->amount,
+                'per_person' => $custom->per_person,
+                'amount' => round(($custom->amount ?? 0) * ($custom->per_person ? $travelers : 1), 2),
+                'editable' => true,
+            ];
+        }
+
+        // Lignes masquées par l'utilisateur, puis statut « payé » (dépense rattachée à la ligne).
+        $paid = $this->trip->expenses->whereNotNull('planned_key')->keyBy('planned_key');
+        $members = $this->trip->budgetMembers->keyBy('id');
+
+        return collect($lines)
+            ->reject(fn (array $line) => $byKey->get($line['key'])?->hidden)
+            ->map(function (array $line) use ($paid, $members) {
+                $expense = $paid->get($line['key']);
+
+                return $line + [
+                    'removable' => true,
+                    'paid' => $expense ? [
+                        'expense_id' => $expense->id,
+                        'amount' => (float) $expense->amount,
+                        'by' => $members->get($expense->paid_by)?->name,
+                    ] : null,
                 ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /** Lignes masquées, pour pouvoir les rétablir. */
+    private function hiddenCount(): int
+    {
+        return TripBudgetLine::where('trip_id', $this->trip->id)->whereNotNull('key')->where('hidden', true)->count();
+    }
+
+    /**
+     * Vols aller et retour attendus (départ du voyage ↔ première / dernière étape), estimés au meilleur
+     * prix Aviasales, tant qu'aucun billet correspondant n'est enregistré dans le voyage.
+     */
+    private function flightEstimates($reservations, $settings, int $travelers): array
+    {
+        $trip = $this->trip;
+        $first = $trip->stays->first();
+        $last = $trip->stays->last();
+        if (!$first || !$trip->origin_latitude || !$trip->origin_longitude) {
+            return [];
+        }
+
+        $airports = app(AirportDirectory::class);
+        $home = $airports->nearest((float) $trip->origin_latitude, (float) $trip->origin_longitude, 1)[0] ?? null;
+        $outboundAirport = $airports->nearest((float) $first->latitude, (float) $first->longitude, 1)[0] ?? null;
+        $returnAirport = $airports->nearest((float) $last->latitude, (float) $last->longitude, 1)[0] ?? null;
+        if (!$home || !$outboundAirport || $home['code'] === $outboundAirport['code']
+            || AirportDirectory::distanceKm($home['lat'], $home['lng'], $outboundAirport['lat'], $outboundAirport['lng']) < 300) {
+            return [];
+        }
+
+        $legs = [
+            ['key' => 'estimate-flight-out', 'label' => 'Vol aller', 'from' => $home, 'to' => $outboundAirport, 'date' => Carbon::parse($first->arrival_date)->toDateString()],
+            ['key' => 'estimate-flight-back', 'label' => 'Vol retour', 'from' => $returnAirport ?? $outboundAirport, 'to' => $home, 'date' => Carbon::parse($last->departure_date)->toDateString()],
+        ];
+
+        $flights = $reservations->where('kind', 'flight');
+        $provider = app(TravelpayoutsProvider::class);
+        $lines = [];
+
+        foreach ($legs as $index => $leg) {
+            // Billet déjà enregistré pour ce trajet (à 2 jours près) : il figure dans les réservations.
+            $covered = $flights->contains(function ($reservation) use ($leg, $index) {
+                $date = $reservation->starts_at?->toDateString();
+                return $date && abs(Carbon::parse($date)->diffInDays(Carbon::parse($leg['date']), false)) <= 2
+                    || (!$date && $index === 0);
             });
+            if ($covered) {
+                continue;
+            }
+
+            $override = $settings->get($leg['key']);
+            $estimate = $override?->amount === null && $provider->enabled()
+                ? rescue(fn () => $provider->estimate(new FlightSearchQuery($leg['from']['code'], $leg['to']['code'], $leg['date'], $travelers)), null, false)
+                : null;
+            $unit = $override?->amount ?? $estimate['price'] ?? null;
+
+            $lines[] = [
+                'key' => $leg['key'],
+                'type' => 'estimate',
+                'id' => null,
+                'group' => 'transport',
+                'label' => $leg['label'] . ' ' . $leg['from']['code'] . ' → ' . $leg['to']['code'],
+                'detail' => $override?->amount !== null
+                    ? 'Montant saisi'
+                    : ($estimate ? ($estimate['exact_date'] ? 'Meilleur prix Aviasales ce jour-là' : 'Meilleur prix Aviasales du mois') : 'À estimer'),
+                'date' => $leg['date'],
+                'unit_price' => $unit,
+                'per_person' => true,
+                'amount' => round(($unit ?? 0) * $travelers, 2),
+                'editable' => true,
+            ];
+        }
 
         return $lines;
     }

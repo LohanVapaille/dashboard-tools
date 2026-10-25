@@ -52,6 +52,7 @@ export default function ExpenseModal({ budget, draft, error, onClose, onSubmit }
             spent_on: spentOn || null,
             paid_by: paidBy,
             split_mode: mode,
+            planned_key: draft.planned_key || null,
             shares: selectedIds.map((id) => ({ member_id: id, amount: mode === "amounts" ? Number(selected[id]) || 0 : null })),
         });
         setSaving(false);

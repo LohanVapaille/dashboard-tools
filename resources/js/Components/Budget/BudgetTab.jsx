@@ -5,12 +5,14 @@ import {
     BedDouble,
     Bus,
     Check,
+    ChevronDown,
     CircleDollarSign,
     Loader2,
     Pencil,
     PiggyBank,
     Plus,
     Receipt,
+    RotateCcw,
     Scale,
     Ticket,
     Trash2,
@@ -24,6 +26,7 @@ import { formatMoney } from "@/Utils/formatters";
 import { formatDay } from "@/Utils/stays";
 import { expenseCategoryMeta } from "@/Constants/budget";
 import ExpenseModal from "./ExpenseModal";
+import { confirmDialog } from "@/Components/ConfirmDialog";
 
 // Regroupement du prévisionnel ; « expense » est la catégorie proposée quand on marque la ligne comme payée.
 const PLANNED_GROUPS = [
@@ -32,6 +35,8 @@ const PLANNED_GROUPS = [
     { key: "activites", label: "Activités", Icon: Ticket, color: "bg-violet-500", expense: "activite" },
     { key: "repas", label: "Repas", Icon: UtensilsCrossed, color: "bg-amber-500", expense: "repas" },
 ];
+const OTHER_GROUP = { key: "autre", label: "Autres", Icon: Receipt, color: "bg-slate-500", expense: "autre" };
+const groupOf = (key) => [...PLANNED_GROUPS, OTHER_GROUP].find((group) => group.key === key) || OTHER_GROUP;
 
 function AmountEditor({ line, travelers, onSave }) {
     const [editing, setEditing] = useState(false);
@@ -82,28 +87,99 @@ function AmountEditor({ line, travelers, onSave }) {
     );
 }
 
-function PlannedSection({ budget, canEdit, onSave, onMarkPaid }) {
+/** Interrupteur « Non payé / Payé » : payé = une dépense enregistrée est rattachée à la ligne. */
+function PaidToggle({ line, disabled, onToggle }) {
+    const paid = Boolean(line.paid);
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={paid}
+            disabled={disabled}
+            onClick={() => onToggle(line)}
+            title={paid ? `Payé${line.paid.by ? ` par ${line.paid.by}` : ""} · cliquer pour annuler` : "Marquer comme payé et l’ajouter aux dépenses"}
+            className="group inline-flex items-center gap-2 rounded-full py-1 pl-1 pr-3 text-xs font-bold ring-1 transition disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:shadow-sm ring-slate-200 dark:ring-slate-700"
+        >
+            <span className={`relative h-5 w-9 rounded-full transition ${paid ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`}>
+                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${paid ? "left-[18px]" : "left-0.5"}`} />
+            </span>
+            <span className={paid ? "text-emerald-700 dark:text-emerald-300" : "text-slate-500"}>
+                {paid ? `Payé${line.paid.by ? ` · ${line.paid.by}` : ""}` : "Non payé"}
+            </span>
+        </button>
+    );
+}
+
+function AddLineForm({ onAdd, onCancel }) {
+    const [data, setData] = useState({ label: "", amount: "", group: "autre", per_person: false });
+    const submit = async (event) => {
+        event.preventDefault();
+        if (await onAdd({ ...data, amount: data.amount === "" ? null : Number(data.amount) })) onCancel();
+    };
+
+    return (
+        <form onSubmit={submit} className="grid gap-2 rounded-2xl border border-orange-200 bg-orange-50/60 p-4 dark:border-orange-900/50 dark:bg-orange-950/20 sm:grid-cols-[1fr_8rem_9rem_auto_auto] sm:items-center">
+            <input autoFocus required maxLength={191} placeholder="Assurance voyage, visa, matériel…" value={data.label} onChange={(event) => setData({ ...data, label: event.target.value })} className="rounded-xl border-slate-300 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+            <input type="number" min="0" step="0.01" placeholder="Montant €" value={data.amount} onChange={(event) => setData({ ...data, amount: event.target.value })} className="rounded-xl border-slate-300 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+            <select value={data.group} onChange={(event) => setData({ ...data, group: event.target.value })} className="rounded-xl border-slate-300 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+                {[...PLANNED_GROUPS, OTHER_GROUP].map((group) => <option key={group.key} value={group.key}>{group.label}</option>)}
+            </select>
+            <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                <input type="checkbox" checked={data.per_person} onChange={(event) => setData({ ...data, per_person: event.target.checked })} className="rounded text-orange-500 focus:ring-orange-500" /> par personne
+            </label>
+            <div className="flex gap-1">
+                <button type="submit" className="rounded-xl bg-orange-500 px-3 py-2 text-sm font-bold text-white hover:bg-orange-600">Ajouter</button>
+                <button type="button" onClick={onCancel} className="rounded-xl p-2 text-slate-400 hover:bg-white dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
+            </div>
+        </form>
+    );
+}
+
+function PlannedSection({ budget, canEdit, onSave, onTogglePaid, onRemove, onAdd, onRestore }) {
     const [openGroups, setOpenGroups] = useState(() => new Set(["logement", "transport"]));
+    const [adding, setAdding] = useState(false);
     const toggle = (key) => setOpenGroups((current) => {
         const next = new Set(current);
         next.has(key) ? next.delete(key) : next.add(key);
         return next;
     });
 
+    const toolbar = canEdit && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+            {budget.hidden_lines > 0 ? (
+                <button type="button" onClick={onRestore} className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-orange-600">
+                    <RotateCcw className="h-3.5 w-3.5" /> {budget.hidden_lines} ligne{budget.hidden_lines > 1 ? "s" : ""} retirée{budget.hidden_lines > 1 ? "s" : ""} · rétablir
+                </button>
+            ) : <span />}
+            {!adding && (
+                <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-orange-300 px-3 py-2 text-xs font-bold text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-300 dark:hover:bg-orange-950/30">
+                    <Plus className="h-4 w-4" /> Ajouter une ligne
+                </button>
+            )}
+        </div>
+    );
+
     if (!budget.planned.length) {
         return (
-            <div className="rounded-2xl border-2 border-dashed border-orange-200 bg-white p-10 text-center text-sm text-slate-500 dark:border-orange-900/50 dark:bg-slate-800">
-                Ajoutez des séjours et des activités au programme (ou laissez l’IA le faire) : leur coût apparaîtra ici.
+            <div className="space-y-3">
+                {toolbar}
+                {adding && <AddLineForm onAdd={onAdd} onCancel={() => setAdding(false)} />}
+                <div className="rounded-2xl border-2 border-dashed border-orange-200 bg-white p-10 text-center text-sm text-slate-500 dark:border-orange-900/50 dark:bg-slate-800">
+                    Ajoutez des séjours et des activités au programme (ou laissez l’IA le faire) : leur coût apparaîtra ici.
+                </div>
             </div>
         );
     }
 
     return (
         <div className="space-y-3">
-            {PLANNED_GROUPS.map((group) => {
+            {toolbar}
+            {adding && <AddLineForm onAdd={onAdd} onCancel={() => setAdding(false)} />}
+            {[...PLANNED_GROUPS, OTHER_GROUP].map((group) => {
                 const lines = budget.planned.filter((line) => line.group === group.key);
                 if (!lines.length) return null;
                 const total = lines.reduce((sum, line) => sum + line.amount, 0);
+                const paidTotal = lines.reduce((sum, line) => sum + (line.paid ? line.amount : 0), 0);
                 const missing = lines.filter((line) => line.unit_price == null).length;
                 const isOpen = openGroups.has(group.key);
 
@@ -114,25 +190,27 @@ function PlannedSection({ budget, canEdit, onSave, onMarkPaid }) {
                             <span className="flex-1">
                                 <span className="block font-bold text-slate-800 dark:text-slate-100">{group.label}</span>
                                 <span className="block text-xs text-slate-500">
-                                    {lines.length} poste{lines.length > 1 ? "s" : ""}{missing > 0 && ` · ${missing} à estimer`}
+                                    {lines.length} poste{lines.length > 1 ? "s" : ""}{missing > 0 && ` · ${missing} à estimer`}{paidTotal > 0 && ` · ${formatMoney(paidTotal)} payés`}
                                 </span>
                             </span>
                             <span className="text-lg font-black text-slate-900 dark:text-white">{formatMoney(total)}</span>
+                            <ChevronDown className={`h-4 w-4 text-slate-400 transition ${isOpen ? "rotate-180" : ""}`} />
                         </button>
                         {isOpen && (
                             <ul className="divide-y divide-slate-100 border-t border-slate-100 dark:divide-slate-700 dark:border-slate-700">
                                 {lines.map((line) => (
-                                    <li key={line.key} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
-                                        <div className="min-w-0 flex-1">
-                                            <p className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{line.label}</p>
+                                    <li key={line.key} className={`flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 ${line.paid ? "bg-emerald-50/40 dark:bg-emerald-950/10" : ""}`}>
+                                        <div className="min-w-0 flex-1 basis-48">
+                                            <p className={`truncate text-sm font-semibold ${line.paid ? "text-slate-500 line-through decoration-emerald-400/70" : "text-slate-700 dark:text-slate-200"}`}>{line.label}</p>
                                             <p className="text-xs text-slate-500">
                                                 {[line.date && formatDay(line.date), line.detail].filter(Boolean).join(" · ")}
                                             </p>
                                         </div>
                                         <AmountEditor line={line} travelers={budget.travelers} onSave={canEdit ? onSave : null} />
-                                        {canEdit && line.amount > 0 && (
-                                            <button type="button" onClick={() => onMarkPaid(line, group.expense)} title="Enregistrer comme dépense payée" className="rounded-lg border border-orange-200 px-2 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-50 dark:border-orange-900 dark:text-orange-300 dark:hover:bg-orange-950/40">
-                                                Payé
+                                        <PaidToggle line={line} disabled={!canEdit || (!line.paid && line.amount <= 0)} onToggle={onTogglePaid} />
+                                        {canEdit && line.removable && (
+                                            <button type="button" onClick={() => onRemove(line)} title="Retirer du prévisionnel" className="rounded-lg p-1.5 text-slate-300 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40">
+                                                <Trash2 className="h-4 w-4" />
                                             </button>
                                         )}
                                     </li>
@@ -145,7 +223,6 @@ function PlannedSection({ budget, canEdit, onSave, onMarkPaid }) {
         </div>
     );
 }
-
 function MembersBar({ budget, canEdit, request }) {
     const [name, setName] = useState("");
     const [adding, setAdding] = useState(false);
@@ -204,6 +281,13 @@ function ExpensesSection({ budget, canEdit, request, onAdd, onEdit }) {
                     )}
                 </div>
 
+                {budget.expense_limit != null && budget.expenses.length >= budget.expense_limit - 3 && (
+                    <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                        {budget.expenses.length} / {budget.expense_limit} dépenses de la version gratuite.{" "}
+                        <a href={route("billing.show")} className="font-bold underline">Passer à Premium</a> pour des dépenses illimitées.
+                    </p>
+                )}
+
                 {budget.expenses.length === 0 ? (
                     <p className="rounded-2xl border-2 border-dashed border-slate-200 p-8 text-center text-sm text-slate-500 dark:border-slate-700">
                         Aucune dépense pour le moment. Ajoutez qui a payé quoi : les comptes entre voyageurs se calculent tout seuls.
@@ -229,7 +313,7 @@ function ExpensesSection({ budget, canEdit, request, onAdd, onEdit }) {
                                             <button type="button" onClick={() => onEdit(expense)} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700" title="Modifier"><Pencil className="h-3.5 w-3.5" /></button>
                                             <button
                                                 type="button"
-                                                onClick={() => window.confirm(`Supprimer la dépense « ${expense.title} » ?`) && request("delete", route("trips.expenses.destroy", [budget.tripId, expense.id]))}
+                                                onClick={async () => (await confirmDialog({ title: "Supprimer cette dépense ?", message: `« ${expense.title} » sera retirée du budget et des comptes entre voyageurs.`, confirmLabel: "Supprimer" })) && request("delete", route("trips.expenses.destroy", [budget.tripId, expense.id]))}
                                                 className="rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40"
                                                 title="Supprimer"
                                             >
@@ -306,7 +390,7 @@ export default function BudgetTab({ trip, canEdit }) {
         axios.get(route("trips.budget.show", trip.id))
             .then((response) => receive(response.data))
             .catch(() => setError("Impossible de charger le budget."));
-    }, [trip.id, trip.stays, trip.transitions]);
+    }, [trip.id, trip.stays, trip.transitions, trip.reservations]);
 
     const request = async (method, url, data) => {
         setError("");
@@ -321,7 +405,34 @@ export default function BudgetTab({ trip, canEdit }) {
         }
     };
 
-    const savePlanned = (line, amount) => request("patch", route("trips.budget.planned", trip.id), { type: line.type, id: line.id, amount });
+    const savePlanned = (line, amount) => request("patch", route("trips.budget.planned", trip.id), { type: line.type, id: line.id, key: line.type === "estimate" ? line.key : undefined, amount });
+
+    // Payé → ouvre la dépense pré-remplie (qui a payé, pour qui) ; non payé → supprime la dépense liée.
+    const togglePaid = async (line) => {
+        if (!line.paid) {
+            setExpenseDraft({ title: line.label, amount: line.amount, category: groupOf(line.group).expense, spent_on: line.date, planned_key: line.key });
+            return;
+        }
+        const confirmed = await confirmDialog({
+            title: "Repasser en « non payé » ?",
+            message: `La dépense « ${line.label} » (${formatMoney(line.paid.amount)}${line.paid.by ? `, payée par ${line.paid.by}` : ""}) sera supprimée des comptes entre voyageurs.`,
+            confirmLabel: "Marquer non payé",
+            tone: "warning",
+        });
+        if (confirmed) await request("delete", route("trips.expenses.destroy", [trip.id, line.paid.expense_id]));
+    };
+
+    const removeLine = async (line) => {
+        const source = { activity: "L’activité reste dans le programme.", stay: "L’étape reste dans le voyage.", transition: "Le trajet reste dans le programme.", reservation: "La réservation reste enregistrée dans le voyage.", estimate: "Vous pourrez la rétablir à tout moment." }[line.type] || "";
+        const confirmed = await confirmDialog({
+            title: "Retirer cette ligne du prévisionnel ?",
+            message: `« ${line.label} » ne sera plus comptée dans le budget. ${line.type === "custom" ? "Cette ligne ajoutée à la main sera supprimée." : source}`,
+            confirmLabel: "Retirer",
+        });
+        if (confirmed) await request("post", route("trips.budget.lines.hide", trip.id), { key: line.key });
+    };
+
+    const addLine = (payload) => request("post", route("trips.budget.lines.store", trip.id), payload);
 
     const saveTarget = async (event) => {
         event.preventDefault();
@@ -332,7 +443,7 @@ export default function BudgetTab({ trip, canEdit }) {
 
     const shares = useMemo(() => {
         if (!budget) return [];
-        return PLANNED_GROUPS.map((group) => ({
+        return [...PLANNED_GROUPS, OTHER_GROUP].map((group) => ({
             ...group,
             total: budget.planned.filter((line) => line.group === group.key).reduce((sum, line) => sum + line.amount, 0),
         })).filter((group) => group.total > 0);
@@ -437,7 +548,10 @@ export default function BudgetTab({ trip, canEdit }) {
                     budget={budget}
                     canEdit={canEdit}
                     onSave={savePlanned}
-                    onMarkPaid={(line, category) => setExpenseDraft({ title: line.label, amount: line.amount, category, spent_on: line.date })}
+                    onTogglePaid={togglePaid}
+                    onRemove={removeLine}
+                    onAdd={addLine}
+                    onRestore={() => request("post", route("trips.budget.lines.restore", trip.id))}
                 />
             ) : (
                 <ExpensesSection budget={budget} canEdit={canEdit} request={request} onAdd={() => setExpenseDraft({})} onEdit={(expense) => setExpenseDraft(expense)} />
@@ -456,8 +570,9 @@ export default function BudgetTab({ trip, canEdit }) {
                             payload,
                         );
                         if (ok) {
+                            // Payé depuis le prévisionnel : on reste sur le prévisionnel pour voir la ligne cochée.
+                            if (!expenseDraft.planned_key) setView("expenses");
                             setExpenseDraft(null);
-                            setView("expenses");
                         }
                         return ok;
                     }}

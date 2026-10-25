@@ -153,16 +153,18 @@ class LiteApiStaysProvider implements BookableStayProvider
     {
         $guests = collect($order->guests)->values();
         $holder = $guests->first();
+        // Payé dans le module Nuitée : la réservation est rattachée à cette transaction, pas à la carte du compte.
+        $paidWithSdk = $order->payment_method === 'liteapi_sdk';
         $payload = fn (string $prebookId) => [
             'prebookId' => $prebookId,
             // Référence unique : LiteAPI refuse un second envoi identique (pas de double réservation).
             'clientReference' => $order->reference . '-' . $booking->id,
-            'holder' => [
+            'holder' => array_filter([
                 'firstName' => $holder['given_name'],
                 'lastName' => $holder['family_name'],
                 'email' => $order->contact_email,
                 'phone' => $order->contact_phone,
-            ],
+            ]),
             'guests' => collect(range(1, max(1, $booking->rooms)))->map(fn (int $room) => [
                 'occupancyNumber' => $room,
                 'firstName' => $guests[($room - 1) % $guests->count()]['given_name'],
@@ -170,11 +172,15 @@ class LiteApiStaysProvider implements BookableStayProvider
                 'email' => $order->contact_email,
                 'remarks' => $room === 1 ? (string) $order->special_requests : '',
             ])->all(),
-        ];
+        ] + ($paidWithSdk ? ['payment' => ['method' => 'TRANSACTION_ID', 'transactionId' => $order->provider_transaction_id]] : []);
 
         try {
             $result = $this->client->book($payload($booking->quote_id ?: throw new FlightProviderException('Pré-réservation absente.')));
         } catch (FlightProviderException $exception) {
+            // La transaction Nuitée est liée à cette pré-réservation : impossible de la renouveler.
+            if ($paidWithSdk) {
+                throw $exception;
+            }
             // Pré-réservation expirée entre le panier et le paiement : on la renouvelle au même prix.
             $quote = $this->quote($booking->rate);
             if (abs($quote['amount'] - (float) $booking->stay_amount) >= 0.01) {

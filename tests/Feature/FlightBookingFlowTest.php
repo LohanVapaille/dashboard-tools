@@ -22,6 +22,8 @@ class FlightBookingFlowTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Parcours de vente directe (désactivé par défaut, modèle partenaires).
+        config(['commerce.direct_booking' => true]);
 
         config([
             'services.duffel.api_key' => 'duffel_test_key',

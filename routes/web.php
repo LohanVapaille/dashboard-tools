@@ -9,6 +9,7 @@ use App\Http\Controllers\StayTransitionController;
 use App\Http\Controllers\DayBlockController;
 use App\Http\Controllers\DayPeriodController;
 use App\Http\Controllers\TripNoteController;
+use App\Http\Controllers\TripReservationController;
 use App\Http\Controllers\Auth\SocialAuthController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
@@ -33,6 +34,7 @@ use App\Http\Controllers\CartController;
 use App\Http\Controllers\FlightCartController;
 use App\Http\Controllers\StayCartController;
 use App\Http\Controllers\StayCheckoutController;
+use App\Http\Controllers\StayEmbeddedCheckoutController;
 use App\Http\Controllers\StayOrderController;
 use App\Http\Controllers\StaySearchController;
 use App\Http\Controllers\PlaceSuggestionController;
@@ -100,18 +102,21 @@ Route::middleware('auth')->group(function () {
     Route::delete('/trip-photos/{photo}', [TripPhotoController::class, 'destroy'])->name('trips.photos.destroy');
 
     // Panier et achat de billets d'avion
-    Route::get('/panier', [CartController::class, 'index'])->name('flights.cart.index');
-    Route::post('/panier/vols', [FlightCartController::class, 'store'])->middleware('throttle:20,1')->name('flights.cart.store');
-    Route::delete('/panier/vols/{item}', [FlightCartController::class, 'destroy'])->name('flights.cart.destroy');
-    Route::delete('/panier', [CartController::class, 'clear'])->name('flights.cart.clear');
-    Route::post('/panier/paiement', [FlightCheckoutController::class, 'store'])->middleware('throttle:10,1')->name('flights.checkout.store');
+    Route::get('/panier', [CartController::class, 'index'])->middleware('direct.booking')->name('flights.cart.index');
+    Route::post('/panier/vols', [FlightCartController::class, 'store'])->middleware('throttle:20,1')->middleware('direct.booking')->name('flights.cart.store');
+    Route::delete('/panier/vols/{item}', [FlightCartController::class, 'destroy'])->middleware('direct.booking')->name('flights.cart.destroy');
+    Route::delete('/panier', [CartController::class, 'clear'])->middleware('direct.booking')->name('flights.cart.clear');
+    Route::post('/panier/paiement', [FlightCheckoutController::class, 'store'])->middleware('throttle:10,1')->middleware('direct.booking')->name('flights.checkout.store');
     Route::get('/reservations/{order}/paiement-confirme', [FlightCheckoutController::class, 'success'])->name('flights.checkout.success');
 
     // Hébergements : panier et paiement distincts des vols
-    Route::post('/panier/logements', [StayCartController::class, 'store'])->middleware('throttle:20,1')->name('stays.cart.store');
-    Route::delete('/panier/logements/{item}', [StayCartController::class, 'destroy'])->name('stays.cart.destroy');
-    Route::post('/panier/logements/paiement', [StayCheckoutController::class, 'store'])->middleware('throttle:10,1')->name('stays.checkout.store');
+    Route::post('/panier/logements', [StayCartController::class, 'store'])->middleware('throttle:20,1')->middleware('direct.booking')->name('stays.cart.store');
+    Route::delete('/panier/logements/{item}', [StayCartController::class, 'destroy'])->middleware('direct.booking')->name('stays.cart.destroy');
+    Route::post('/panier/logements/paiement', [StayCheckoutController::class, 'store'])->middleware('throttle:10,1')->middleware('direct.booking')->name('stays.checkout.store');
     Route::get('/reservations/logements/{order}', [StayOrderController::class, 'show'])->name('stays.orders.show');
+    // Mode partenaires : réservation d'hôtel payée dans le module Nuitée intégré (Nuitée encaisse).
+    Route::post('/logements/reservation', [StayEmbeddedCheckoutController::class, 'start'])->middleware('throttle:10,1')->name('stays.embedded.start');
+    Route::get('/reservations/logements/{order}/confirmation-hotel', [StayEmbeddedCheckoutController::class, 'complete'])->name('stays.embedded.complete');
     Route::get('/reservations/logements/{order}/statut', [StayOrderController::class, 'status'])->name('stays.orders.status');
     Route::get('/reservations/logements/{order}/paiement-confirme', [StayCheckoutController::class, 'success'])->name('stays.checkout.success');
     Route::post('/reservations/logements/{order}/sejours/{booking}/annulation', [StayOrderController::class, 'cancel'])->name('stays.bookings.cancel');
@@ -137,18 +142,25 @@ Route::get('/flights/offers/{offerId}/baggage', [FlightCartController::class, 'b
 Route::get('/flights/airports/nearest',[TravelSearchController::class, 'nearestAirports'])->middleware('throttle:30,1')->name('flights.airports.nearest');
 Route::post('/trips/{trip}/stays-search', [StaySearchController::class, 'search'])->middleware('throttle:20,1')->name('trips.stays.search');
 Route::post('/trips/{trip}/stays-listings', [StaySearchController::class, 'listings'])->middleware('throttle:20,1')->name('trips.stays.listings');
+Route::get('/stays/photos/{hotelId}', [StaySearchController::class, 'photos'])->middleware('throttle:60,1')->name('stays.photos');
 Route::get('/stays/results/{searchResultId}/rates', [StaySearchController::class, 'rates'])->middleware('throttle:30,1')->name('stays.rates');
 Route::post('/trips/{trip}/travel-search/flights', [TravelSearchController::class, 'flights'])->middleware('throttle:20,1')->name('trips.travel-search.flights');
-Route::get('/conditions-generales', fn () => Inertia\Inertia::render('Legal/Terms', [
+Route::get('/conditions-generales', fn () => config('commerce.direct_booking') ? Inertia\Inertia::render('Legal/Terms', [
     'seller' => config('flights.seller'),
     'flightFeePercent' => App\Services\Flights\FlightPricing::percent(),
     'flightFeeLabel' => config('flights.tax_label'),
     'stayFeePercent' => App\Services\Stays\StayPricing::percent(),
     'stayFeeLabel' => config('stays.commission_label'),
     'guestTripLimit' => TripController::GUEST_TRIP_LIMIT,
+]) : Inertia\Inertia::render('Legal/PartnerTerms', [
+    'seller' => config('flights.seller'),
+    'guestTripLimit' => TripController::GUEST_TRIP_LIMIT,
+    'premiumPrice' => '5 € par mois',
+    'embeddedHotels' => app(App\Services\Stays\StayProviders::class)->checkoutMode() === 'embedded',
 ]))->name('legal.terms');
 Route::get('/mentions-legales', fn () => Inertia\Inertia::render('Legal/Notice', [
     'legal' => config('legal'),
+    'directBooking' => (bool) config('commerce.direct_booking'),
     'appUrl' => config('app.url'),
 ]))->name('legal.notice');
 Route::get('/confidentialite', fn () => Inertia\Inertia::render('Legal/Privacy', [
@@ -156,6 +168,8 @@ Route::get('/confidentialite', fn () => Inertia\Inertia::render('Legal/Privacy',
     'sessionCookie' => config('session.cookie'),
     'sessionMinutes' => (int) config('session.lifetime'),
     'affiliateEnabled' => (bool) config('flights.providers.travelpayouts.drive'),
+    'activitiesWidget' => (bool) config('commerce.activities.getyourguide_partner_id'),
+    'embeddedHotels' => app(App\Services\Stays\StayProviders::class)->checkoutMode() === 'embedded',
 ]))->name('legal.privacy');
 // Ancienne adresse conservée pour les liens déjà envoyés (e-mails de confirmation).
 Route::redirect('/conditions-de-vente-vols', '/conditions-generales', 301)->name('flights.terms');
@@ -164,6 +178,23 @@ Route::get('/', fn() => redirect()->route('trips.index'));
 Route::get('/dashboard', fn() => redirect()->route('trips.index'))->name('dashboard');
 
 // Lien de partage : la page n'a aucun effet, on rejoint en validant le formulaire (avec pseudo si invité).
+Route::post('/liens-partenaires', App\Http\Controllers\PartnerLinkController::class)->middleware('throttle:60,1')->name('partners.link');
+// Chat d'assistance : clients (compte ou invité) et boîte de réception de l'équipe.
+Route::prefix('assistance')->name('support.')->group(function () {
+    Route::get('/conversation', [App\Http\Controllers\SupportChatController::class, 'current'])->name('current');
+    Route::post('/conversation', [App\Http\Controllers\SupportChatController::class, 'start'])->middleware('throttle:5,1')->name('start');
+    Route::get('/conversation/{conversation}', [App\Http\Controllers\SupportChatController::class, 'show'])->name('show');
+    Route::post('/conversation/{conversation}/messages', [App\Http\Controllers\SupportChatController::class, 'send'])->middleware('throttle:30,1')->name('send');
+    Route::post('/conversation/{conversation}/close', [App\Http\Controllers\SupportChatController::class, 'close'])->name('close');
+});
+Route::middleware('auth')->prefix('admin/assistance')->name('admin.support.')->group(function () {
+    Route::get('/', [App\Http\Controllers\Admin\SupportInboxController::class, 'index'])->name('index');
+    Route::get('/conversations', [App\Http\Controllers\Admin\SupportInboxController::class, 'conversations'])->name('conversations');
+    Route::get('/conversations/{conversation}', [App\Http\Controllers\Admin\SupportInboxController::class, 'show'])->name('show');
+    Route::post('/conversations/{conversation}/reply', [App\Http\Controllers\Admin\SupportInboxController::class, 'reply'])->name('reply');
+    Route::post('/conversations/{conversation}/status', [App\Http\Controllers\Admin\SupportInboxController::class, 'status'])->name('status');
+});
+
 Route::get('/lieux/grandes-villes', [PlaceSuggestionController::class, 'cities'])->middleware('throttle:60,1')->name('places.cities');
 
 Route::get('/rejoindre/{token}', [TripInviteController::class, 'show'])->name('trips.join');
@@ -174,6 +205,7 @@ Route::get('/invite/{token}', fn (string $token) => redirect()->route('trips.joi
 
 Route::resource('trips', TripController::class);
 Route::get('/trips/{trip}/budget', [BudgetController::class, 'show'])->name('trips.budget.show');
+Route::get('/trips/{trip}/carnet', [TripController::class, 'printable'])->name('trips.print');
 
 // Édition d'itinéraire — admin/editor/owner uniquement, appliqué une seule fois
 Route::middleware('check.trip.access:edit')->group(function () {
@@ -183,6 +215,9 @@ Route::middleware('check.trip.access:edit')->group(function () {
         ->middleware(['auth', 'throttle:30,1'])->name('trips.ai-itinerary.store');
     Route::patch('/trips/{trip}/budget/target', [BudgetController::class, 'updateTarget'])->name('trips.budget.target');
     Route::patch('/trips/{trip}/budget/planned', [BudgetController::class, 'updatePlanned'])->name('trips.budget.planned');
+    Route::post('/trips/{trip}/budget/lines', [BudgetController::class, 'storeLine'])->name('trips.budget.lines.store');
+    Route::post('/trips/{trip}/budget/lines/hide', [BudgetController::class, 'hideLine'])->name('trips.budget.lines.hide');
+    Route::post('/trips/{trip}/budget/lines/restore', [BudgetController::class, 'restoreLines'])->name('trips.budget.lines.restore');
     Route::post('/trips/{trip}/budget/members', [BudgetController::class, 'storeMember'])->name('trips.budget.members.store');
     Route::patch('/trips/{trip}/budget/members/{member}', [BudgetController::class, 'updateMember'])->name('trips.budget.members.update');
     Route::delete('/trips/{trip}/budget/members/{member}', [BudgetController::class, 'destroyMember'])->name('trips.budget.members.destroy');
@@ -194,11 +229,16 @@ Route::middleware('check.trip.access:edit')->group(function () {
     Route::patch('/trip-notes/{tripNote}', [TripNoteController::class, 'update'])->name('trip-notes.update');
     Route::delete('/trip-notes/{tripNote}', [TripNoteController::class, 'destroy'])->name('trip-notes.destroy');
 
+    Route::post('/trips/{trip}/reservations', [TripReservationController::class, 'store'])->middleware('throttle:60,1')->name('trips.reservations.store');
+    Route::put('/trips/{trip}/reservations/{reservation}', [TripReservationController::class, 'update'])->scopeBindings()->name('trips.reservations.update');
+    Route::delete('/trips/{trip}/reservations/{reservation}', [TripReservationController::class, 'destroy'])->scopeBindings()->name('trips.reservations.destroy');
+
     Route::post('/trips/{trip}/stays', [StayController::class, 'store'])->name('stays.store');
     Route::put('/stays/{stay}', [StayController::class, 'update'])->name('stays.update');
     Route::delete('/stays/{stay}', [StayController::class, 'destroy'])->name('stays.destroy');
 
     Route::post('/trips/{trip}/transitions', [StayTransitionController::class, 'store'])->name('transitions.store');
+    Route::put('/transitions/{transition}', [StayTransitionController::class, 'update'])->name('transitions.update');
     Route::delete('/transitions/{transition}', [StayTransitionController::class, 'destroy'])->name('transitions.destroy');
 
     Route::patch('/days/{day}/periods', [DayPeriodController::class, 'update'])->name('day-periods.update');
@@ -211,9 +251,9 @@ Route::middleware('check.trip.access:edit')->group(function () {
     Route::patch('/activities/{activity}', [ActivityController::class, 'update']);
     Route::patch('/activites/{activity}/period', [ActivityController::class, 'updatePeriod'])->name('activities.update-period');
     Route::delete('/activities/{activity}', [ActivityController::class, 'destroy'])->name('activities.destroy');
+    Route::delete('/trips/{trip}/activities', [ActivityController::class, 'destroyAll'])->name('trips.activities.destroy-all');
 });
 
-Route::get('/day-blocks/{dayBlock}', [DayBlockController::class, 'show'])->name('day-blocks.show');
 
 Route::get('/auth/{provider}', [SocialAuthController::class, 'redirectToProvider'])
     ->whereIn('provider', ['google'])->name('auth.social');

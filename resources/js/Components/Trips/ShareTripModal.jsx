@@ -1,3 +1,4 @@
+import { usePage } from "@inertiajs/react";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import {
@@ -20,6 +21,7 @@ import {
     X,
 } from "lucide-react";
 import { useTripPermissions } from "@/Contexts/TripPermissionsContext";
+import { confirmDialog, notify } from "@/Components/ConfirmDialog";
 
 const ROLES = {
     viewer: { label: "Lecteur", hint: "Consulte le voyage", Icon: Eye, color: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300" },
@@ -68,13 +70,15 @@ export default function ShareTripModal({ trip, onClose }) {
         return () => window.removeEventListener("keydown", onKey);
     }, []);
 
-    const message = `Rejoins mon voyage « ${trip.title} » sur TravelPlanner : ${shareUrl}`;
+    const appName = usePage().props.legal?.company || "LovaTrip";
+    const message = `Rejoins mon voyage « ${trip.title} » sur ${appName} : ${shareUrl}`;
 
     const copy = async () => {
         try {
             await navigator.clipboard.writeText(shareUrl);
         } catch {
-            window.prompt("Copiez le lien :", shareUrl);
+            notify({ title: "Copiez le lien", message: <span className="break-all font-mono text-xs">{shareUrl}</span> });
+            return;
         }
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -83,7 +87,7 @@ export default function ShareTripModal({ trip, onClose }) {
     const nativeShare = () => navigator.share?.({ title: trip.title, text: `Rejoins mon voyage « ${trip.title} »`, url: shareUrl }).catch(() => {});
 
     const resetLink = async () => {
-        if (!window.confirm("Créer un nouveau lien ? L’ancien lien ne fonctionnera plus (les personnes déjà membres gardent leur accès).")) return;
+        if (!(await confirmDialog({ title: "Créer un nouveau lien ?", message: "L’ancien lien ne fonctionnera plus. Les personnes déjà membres gardent leur accès.", confirmLabel: "Nouveau lien", tone: "warning" }))) return;
         setResetting(true);
         try {
             const { data } = await axios.post(route("trips.share", trip.id));
@@ -119,7 +123,7 @@ export default function ShareTripModal({ trip, onClose }) {
     };
 
     const removeMember = async (member) => {
-        if (!window.confirm(`Retirer l’accès de ${member.name || member.email} ?`)) return;
+        if (!(await confirmDialog({ title: "Retirer cet accès ?", message: `${member.name || member.email} ne pourra plus voir ni modifier ce voyage.`, confirmLabel: "Retirer l’accès" }))) return;
         try {
             await axios.delete(route("trips.members.remove", [trip.id, member.id]));
             setMembers(members.filter((item) => item.id !== member.id));

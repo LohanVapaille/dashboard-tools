@@ -23,6 +23,8 @@ class LiteApiStaysTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Parcours de vente directe (désactivé par défaut, modèle partenaires).
+        config(['commerce.direct_booking' => true]);
 
         $this->checkIn = now()->addMonth()->toDateString();
         $this->checkOut = now()->addMonth()->addDays(2)->toDateString();
@@ -178,5 +180,33 @@ class LiteApiStaysTest extends TestCase
         $this->assertSame('cancelled', $booking->fresh()->status);
         Http::assertSent(fn (Request $request) => str_contains($request->url(), '/refunds') && $request['amount'] === 17000);
         $this->assertSame('170.00', (string) $order->fresh()->refunded_amount);
+    }
+
+    public function test_a_shown_room_can_be_added_even_if_liteapi_regenerates_offer_ids(): void
+    {
+        $user = User::factory()->create();
+        $trip = Trip::create(['title' => 'Paris', 'start_date' => $this->checkIn, 'end_date' => $this->checkOut, 'user_id' => $user->id]);
+        $fresh = $this->ratesResponse();
+        $fresh['data'][0]['roomTypes'] = [$this->offer('off_new_cheap', 180, 'RO', 'NRFN'), $this->offer('off_new_flex', 220, 'BB', 'RFN')];
+
+        Http::fake([
+            // Comme le vrai LiteAPI : chaque recherche renvoie de nouveaux identifiants d'offre.
+            'api.liteapi.travel/v3.0/hotels/rates' => Http::sequence()->push($this->ratesResponse())->whenEmpty(Http::response($fresh)),
+            'api.liteapi.travel/v3.0/data/hotel*' => Http::response(['data' => []]),
+            'book.liteapi.travel/v3.0/rates/prebook' => Http::response(['data' => [
+                'prebookId' => 'pb_123', 'price' => 220, 'currency' => 'EUR',
+                'roomTypes' => [['rates' => [['adultCount' => 2, 'childCount' => 0]]]],
+            ]]),
+        ]);
+
+        $rates = $this->actingAs($user)->getJson(route('stays.rates', 'lite_lp1897') . '?' . http_build_query($this->context()))->assertOk();
+        $flexible = collect($rates->json('rooms.0.rates'))->firstWhere('refundable', true);
+
+        $this->actingAs($user)->postJson(route('stays.cart.store'), [
+            'trip_id' => $trip->id, 'search_result_id' => 'lite_lp1897', 'rate_id' => $flexible['id'], 'context' => $this->context(),
+        ])->assertOk()->assertJsonPath('count', 1);
+
+        Http::assertSent(fn (Request $request) => str_contains($request->url(), '/rates/prebook')
+            && str_starts_with($request['offerId'], 'off_flex'));
     }
 }

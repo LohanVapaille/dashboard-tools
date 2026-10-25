@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Day;
 use App\Models\Activity;
+use App\Models\Trip;
 use Illuminate\Http\Request;
 
 class ActivityController extends Controller
@@ -45,7 +46,7 @@ class ActivityController extends Controller
 
         $activity->update($validated);
 
-        return back();
+        return $request->wantsJson() ? response()->json($activity->fresh()) : back();
     }
 
     public function updatePeriod(Request $request, Activity $activity)
@@ -89,5 +90,13 @@ class ActivityController extends Controller
 
         // Si la requête est en AJAX/Axios, un statut 200 vide ou noContent convient parfaitement
         return response()->noContent();
+    }
+
+    /** Vide tout le programme du voyage (activités de toutes les journées), étapes et infos conservées. */
+    public function destroyAll(Trip $trip)
+    {
+        $deleted = Activity::whereIn('day_id', Day::whereIn('stay_id', $trip->stays()->select('id'))->select('id'))->delete();
+
+        return response()->json(['deleted' => $deleted]);
     }
 }

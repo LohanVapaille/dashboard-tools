@@ -106,6 +106,8 @@ export default function StayPropertyCard({ property, onOpen, highlighted, onHove
                                 <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600"><ShieldCheck className="h-3 w-3" /> Annulation possible</p>
                             )}
                         </div>
+                    ) : property.members_only ? (
+                        <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Prix membres · connectez-vous pour les voir</p>
                     ) : (
                         <p className="text-xs text-slate-500">Comparez les prix sur Booking, Airbnb, Expedia…</p>
                     )}

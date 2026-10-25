@@ -12,7 +12,7 @@
 */
 
 return [
-    'company' => env('LEGAL_COMPANY_NAME', env('APP_NAME', 'TravelPlanner')),
+    'company' => env('LEGAL_COMPANY_NAME', env('APP_NAME', 'LovaTrip')),
     // Ex. « Entreprise individuelle (micro-entreprise) », « SAS au capital de 1 000 € »
     'legal_form' => env('LEGAL_FORM'),
     'address' => env('LEGAL_ADDRESS'),

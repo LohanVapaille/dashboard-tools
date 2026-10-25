@@ -5,10 +5,15 @@ import { BedDouble, Check, ChevronDown, Clock3, ExternalLink, Globe, LoaderCircl
 import { firstError, formatPrice } from "@/Utils/flights";
 import { amenityMeta, formatDay, partnerMeta, typeMeta } from "@/Utils/stays";
 import { PropertyCover, Stars } from "@/Components/Stays/StayPropertyCard";
+import EmbeddedCheckout from "@/Components/Stays/EmbeddedCheckout";
+import PhotoCarousel from "@/Components/Stays/PhotoCarousel";
+
+// Identifiant de l'annuaire LiteAPI d'un logement, pour charger toute sa galerie.
+const directoryId = (property) => property.directory_id || (property.id?.startsWith("lite_") ? property.id.slice(5) : null);
 
 const bedLabel = { single: "lit simple", double: "lit double", queen: "lit queen", king: "lit king", sofabed: "canapé-lit", twin: "lit jumeau" };
 
-function RateRow({ rate, onBook, state }) {
+function RateRow({ rate, onBook, state, embedded }) {
     const [open, setOpen] = useState(false);
     return (
         <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
@@ -41,7 +46,7 @@ function RateRow({ rate, onBook, state }) {
                         className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-2 text-xs font-bold text-white shadow disabled:opacity-50"
                     >
                         {state === "loading" ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : state === "added" ? <Check className="h-3.5 w-3.5" /> : <ShoppingCart className="h-3.5 w-3.5" />}
-                        {state === "added" ? "Dans le panier" : "Ajouter au panier"}
+                        {embedded ? "Réserver" : state === "added" ? "Dans le panier" : "Ajouter au panier"}
                     </button>
                 </div>
             </div>
@@ -59,7 +64,7 @@ function RateRow({ rate, onBook, state }) {
     );
 }
 
-export default function StayDetailModal({ property, trip, search, onClose }) {
+export default function StayDetailModal({ property, trip, search, onPartner, onClose }) {
     // Contexte de la recherche : nécessaire pour recharger les tarifs (dates, voyageurs).
     const context = search
         ? { latitude: search.latitude, longitude: search.longitude, check_in: search.check_in, check_out: search.check_out, adults: search.adults, rooms: search.rooms }
@@ -70,7 +75,21 @@ export default function StayDetailModal({ property, trip, search, onClose }) {
     const [error, setError] = useState("");
     const [bookState, setBookState] = useState({});
     const [cartError, setCartError] = useState("");
+    // Mode partenaires avec paiement Nuitée intégré : réservation dans la fiche, sans panier.
+    const embedded = props.commerce?.stay_checkout === "embedded";
+    const [checkout, setCheckout] = useState(null);
     const type = typeMeta[property.type] || typeMeta.hotel;
+    const [gallery, setGallery] = useState([]);
+
+    // Galerie complète (jusqu'à 40 photos) : de quoi se faire une vraie idée avant de réserver.
+    useEffect(() => {
+        const id = directoryId(property);
+        if (!id) return;
+        axios.get(route("stays.photos", id)).then((response) => setGallery(response.data.photos || [])).catch(() => {});
+    }, [property.id]);
+
+    const photos = [...gallery, ...[...(property.photos || []), ...(details?.property?.photos || [])].map((url) => ({ url }))]
+        .filter((photo, position, all) => photo.url && all.findIndex((other) => other.url === photo.url) === position);
 
     useEffect(() => {
         const close = (event) => event.key === "Escape" && onClose();
@@ -90,7 +109,11 @@ export default function StayDetailModal({ property, trip, search, onClose }) {
             .catch((requestError) => setError(firstError(requestError, "Impossible de charger les chambres disponibles.")));
     }, [property.id]);
 
-    const book = async (rate) => {
+    const book = async (rate, room) => {
+        if (embedded) {
+            setCheckout({ rate, room });
+            return;
+        }
         setCartError("");
         setBookState((current) => ({ ...current, [rate.id]: "loading" }));
         try {
@@ -107,23 +130,15 @@ export default function StayDetailModal({ property, trip, search, onClose }) {
 
     return (
         <div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/60 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-            <div className="flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-slate-900 sm:rounded-3xl">
-                <div className="relative">
-                    {property.photos?.length > 1 ? (
-                        <div className="grid h-64 grid-cols-4 grid-rows-2 gap-1">
-                            {property.photos.slice(0, 5).map((photo, index) => (
-                                <img key={photo} src={photo} alt="" className={`h-full w-full object-cover ${index === 0 ? "col-span-2 row-span-2" : ""}`} />
-                            ))}
-                        </div>
-                    ) : (
-                        <PropertyCover property={property} className="h-56" />
-                    )}
-                    <button onClick={onClose} className="absolute right-4 top-4 rounded-full bg-white/95 p-2 text-slate-700 shadow-lg hover:bg-white" aria-label="Fermer">
+            <div className="max-h-[95vh] w-full max-w-4xl overflow-y-auto overscroll-contain rounded-t-3xl bg-white shadow-2xl dark:bg-slate-900 sm:rounded-3xl">
+                <div className="sticky top-0 z-20 -mb-14 flex justify-end p-3">
+                    <button onClick={onClose} className="rounded-full bg-white/95 p-2 text-slate-700 shadow-lg hover:bg-white" aria-label="Fermer">
                         <X className="h-5 w-5" />
                     </button>
                 </div>
+                <PhotoCarousel photos={photos} fallback={<PropertyCover property={property} className="h-56" />} />
 
-                <div className="space-y-6 overflow-y-auto p-6">
+                <div className="space-y-6 p-6">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                         <div>
                             <p className="text-xs font-bold uppercase tracking-wider text-emerald-600">{type.label}{property.brand ? ` · ${property.brand}` : ""}</p>
@@ -166,9 +181,17 @@ export default function StayDetailModal({ property, trip, search, onClose }) {
                         <div className="space-y-3">
                             <h4 className="text-sm font-black text-slate-900 dark:text-white">Chambres disponibles</h4>
                             {!details && !error && <p className="flex items-center gap-2 text-sm text-slate-500"><LoaderCircle className="h-4 w-4 animate-spin" /> Interrogation de l’hébergement…</p>}
+                            {details?.members_only && (
+                                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-emerald-50 p-4 dark:bg-emerald-950/30">
+                                    <p className="text-sm text-emerald-900 dark:text-emerald-200"><strong>Tarifs réservés aux membres.</strong> Créez un compte gratuit pour voir les prix et réserver cet hôtel sans quitter le site.</p>
+                                    <Link href={route("login")} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white"><Lock className="h-4 w-4" /> Se connecter</Link>
+                                </div>
+                            )}
                             {error && <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
                             {cartError && <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{cartError}</p>}
-                            {details?.rooms.map((room) => (
+                            {checkout && context ? (
+                                <EmbeddedCheckout trip={trip} property={property} room={checkout.room} rate={checkout.rate} context={context} onBack={() => setCheckout(null)} />
+                            ) : details?.rooms.map((room) => (
                                 <div key={room.name} className="space-y-2 rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/60">
                                     <div className="flex items-center gap-3">
                                         {room.photos?.[0] ? <img src={room.photos[0]} alt="" className="h-14 w-20 rounded-lg object-cover" /> : <span className="flex h-14 w-20 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600"><BedDouble className="h-6 w-6" /></span>}
@@ -178,7 +201,7 @@ export default function StayDetailModal({ property, trip, search, onClose }) {
                                         </div>
                                     </div>
                                     {user ? (
-                                        room.rates.map((rate) => <RateRow key={rate.id} rate={rate} onBook={book} state={bookState[rate.id]} />)
+                                        room.rates.map((rate) => <RateRow key={rate.id} rate={rate} embedded={embedded} onBook={(chosen) => book(chosen, room)} state={bookState[rate.id]} />)
                                     ) : (
                                         <Link href={route("login")} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white"><Lock className="h-4 w-4" /> Se connecter pour réserver</Link>
                                     )}
@@ -195,11 +218,17 @@ export default function StayDetailModal({ property, trip, search, onClose }) {
                     <div className="space-y-2">
                         <h4 className="text-sm font-black text-slate-900 dark:text-white">{property.bookable ? "Comparer ailleurs" : "Voir les prix et réserver chez"}</h4>
                         <div className="flex flex-wrap gap-2">
-                            {Object.entries(property.links || {}).map(([key, url]) => (
-                                <a key={key} href={url} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-bold shadow-sm transition hover:-translate-y-0.5 ${partnerMeta[key]?.color || "bg-slate-100"}`}>
-                                    {partnerMeta[key]?.label || key} <ExternalLink className="h-3.5 w-3.5" />
-                                </a>
-                            ))}
+                            {Object.entries(property.links || {}).map(([key, url]) =>
+                                onPartner ? (
+                                    <button key={key} type="button" onClick={() => onPartner(url, partnerMeta[key]?.label || key)} className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-bold shadow-sm transition hover:-translate-y-0.5 ${partnerMeta[key]?.color || "bg-slate-100"}`}>
+                                        {partnerMeta[key]?.label || key} <ExternalLink className="h-3.5 w-3.5" />
+                                    </button>
+                                ) : (
+                                    <a key={key} href={url} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-bold shadow-sm transition hover:-translate-y-0.5 ${partnerMeta[key]?.color || "bg-slate-100"}`}>
+                                        {partnerMeta[key]?.label || key} <ExternalLink className="h-3.5 w-3.5" />
+                                    </a>
+                                ),
+                            )}
                         </div>
                         {!property.bookable && (
                             <p className="text-[11px] text-slate-500">Dates et nombre de voyageurs pré-remplis. Le prix, la disponibilité et les conditions sont ceux du site partenaire, qui reste votre interlocuteur pour cette réservation.</p>

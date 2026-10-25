@@ -35,8 +35,12 @@ class PartnerLinks
 
     private static function booking(string $search, StaySearchQuery $query): string
     {
+        // ssne / ssne_untouched : sans eux, Booking peut reprendre la dernière destination cherchée
+        // par le visiteur (cookie) au lieu de celle demandée.
         return 'https://www.booking.com/searchresults.fr.html?' . http_build_query(array_filter([
             'ss' => $search,
+            'ssne' => $search,
+            'ssne_untouched' => $search,
             'checkin' => $query->checkIn,
             'checkout' => $query->checkOut,
             'group_adults' => $query->adults,

@@ -22,6 +22,8 @@ class ItineraryPlan
     public const MAX_ACTIVITIES_PER_DAY = 3;
     public const MAX_NEW_STAYS = 15;
 
+    private ActivityDeduplicator $dedupe;
+
     public function __construct(private Trip $trip)
     {
         $this->trip->loadMissing(['stays.days.activities', 'stays.days.blocks']);
@@ -58,7 +60,7 @@ class ItineraryPlan
                 'replaceable' => $this->isReplaceable($stay),
                 'days' => $stay->days->map(fn ($day) => [
                     'date' => $this->date($day->date),
-                    'existing_activities' => $day->activities->pluck('title')->all(),
+                    'existing_activities' => $day->activities->map(fn ($activity) => trim($activity->title . ' (' . $activity->period . ($activity->location_name ? ', ' . $activity->location_name : '') . ')'))->all(),
                 ])->all(),
             ])->values()->all(),
             'free_periods' => $this->freePeriods(),
@@ -99,6 +101,15 @@ class ItineraryPlan
      */
     public function normalize(array $stays): array
     {
+        // Tout ce qui est déjà prévu dans le voyage, quel que soit le jour : l'IA ne doit pas le reproposer.
+        $this->dedupe = new ActivityDeduplicator();
+        foreach ($this->trip->stays as $stay) {
+            foreach ($stay->days as $day) {
+                foreach ($day->activities as $activity) {
+                    $this->dedupe->remember($activity->title, $activity->location_name, $activity->category, $this->date($day->date));
+                }
+            }
+        }
         $existing = $this->trip->stays->keyBy('id');
         $kept = collect($stays)->map(fn ($entry) => is_array($entry) && is_numeric($entry['id'] ?? null) ? (int) $entry['id'] : null)->filter()->all();
         $taken = $this->trip->stays
@@ -218,9 +229,11 @@ class ItineraryPlan
                 'day_id' => $dates[$day['date']],
                 'activities' => collect(is_array($day['activities'] ?? null) ? $day['activities'] : [])
                     ->filter(fn ($activity) => is_array($activity))
-                    ->take(self::MAX_ACTIVITIES_PER_DAY)
                     ->map(fn ($activity) => $this->activity($activity))
                     ->filter()
+                    // Doublon d'une activité déjà prévue (ou proposée plus tôt dans la réponse) : écartée.
+                    ->reject(fn ($activity) => $this->dedupe->isDuplicate($activity['title'], $activity['location_name'], $activity['category'], $day['date']))
+                    ->take(self::MAX_ACTIVITIES_PER_DAY)
                     ->values()
                     ->all(),
             ])

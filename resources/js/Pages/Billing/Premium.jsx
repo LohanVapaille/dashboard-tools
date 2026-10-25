@@ -13,15 +13,15 @@ export default function Premium({ isPremium }) {
 
     return (
         <GuestLayout>
-            <Head title="TravelPlanner Premium" />
+            <Head title="Premium" />
             <div className="mx-auto max-w-2xl px-4 py-12">
                 <div className="rounded-3xl border border-indigo-200 bg-white p-8 text-center shadow-xl dark:border-indigo-900 dark:bg-slate-800">
                     <Sparkles className="mx-auto h-10 w-10 text-indigo-500" />
                     <h1 className="mt-4 text-3xl font-black text-slate-900 dark:text-white">
-                        TravelPlanner Premium
+                        {props.legal?.company || "LovaTrip"} Premium
                     </h1>
                     <p className="mt-2 text-slate-600 dark:text-slate-300">
-                        Générez des itinéraires sans la limite gratuite quotidienne.
+                        Planifiez sans limite, pour vous et tous les voyageurs de vos voyages.
                     </p>
                     <div className="my-6">
                         <span className="text-5xl font-black text-indigo-600">5 €</span>
@@ -29,10 +29,11 @@ export default function Premium({ isPremium }) {
                     </div>
                     <ul className="mx-auto max-w-sm space-y-3 text-left text-sm text-slate-700 dark:text-slate-200">
                         {[
-                            "Génération d'itinéraires étendue",
-                            "Tous vos voyages inclus",
+                            "Programmes IA quasi illimités (3 par jour en gratuit)",
+                            "Dépenses partagées illimitées (15 par voyage en gratuit)",
+                            "Carnet de voyage imprimable et exportable en PDF",
+                            "Avantages partagés avec tous les participants de vos voyages",
                             "Résiliation depuis Stripe à tout moment",
-                            "Protection anti-abus pour préserver le service",
                         ].map((item) => (
                             <li key={item} className="flex items-center gap-2">
                                 <Check className="h-4 w-4 text-emerald-500" />

@@ -13,6 +13,9 @@ const parseDroppableId = (id) => {
     return { dayId: Number(dayId), period };
 };
 
+const dayPlaces = (stays) =>
+    Object.fromEntries((stays || []).flatMap((stay) => (stay.days || []).map((day) => [day.id, { city: stay.location_name.split(",")[0].trim(), date: day.date }])));
+
 const groupByDay = (stays) =>
     Object.fromEntries((stays || []).flatMap((stay) => (stay.days || []).map((day) => [day.id, day.activities || []])));
 
@@ -65,7 +68,7 @@ export function ActivityBoard({ stays, children }) {
     };
 
     return (
-        <ActivityBoardContext.Provider value={{ byDay, setDayActivities }}>
+        <ActivityBoardContext.Provider value={{ byDay, setDayActivities, places: dayPlaces(stays) }}>
             {error && (
                 <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">{error}</p>
             )}
@@ -79,4 +82,9 @@ export function useDayActivities(day) {
     const { byDay, setDayActivities } = useContext(ActivityBoardContext);
 
     return [byDay[day.id] || [], (update) => setDayActivities(day.id, update)];
+}
+
+/** Ville et date de la journée d'une activité. */
+export function useDayPlace(dayId) {
+    return useContext(ActivityBoardContext)?.places[dayId] || null;
 }

@@ -23,7 +23,7 @@ const Card = ({ icon: Icon, title, description, children, tone = "indigo" }) => 
 const FieldError = ({ message }) => (message ? <p className="mt-1 text-xs font-medium text-rose-600">{message}</p> : null);
 
 export default function ProfileEdit({ stats }) {
-    const { auth, flash, errors } = usePage().props;
+    const { auth, flash, errors, commerce } = usePage().props;
     const user = auth.user;
     const fileInput = useRef(null);
     const [preview, setPreview] = useState(null);
@@ -202,9 +202,10 @@ export default function ProfileEdit({ stats }) {
                         {[
                             [Compass, "Mes voyages", route("trips.index"), "from-sky-500 to-indigo-500"],
                             [Ticket, "Mes réservations", route("flights.orders.index"), "from-emerald-500 to-teal-500"],
-                            [ShoppingCart, "Mon panier", route("flights.cart.index"), "from-violet-500 to-fuchsia-500"],
+                            // Panier uniquement en vente directe : en mode partenaires, tout s'achète chez eux.
+                            commerce?.direct_booking && [ShoppingCart, "Mon panier", route("flights.cart.index"), "from-violet-500 to-fuchsia-500"],
                             [Sparkles, stats.premium ? "Mon abonnement Premium" : "Passer à Premium", route("billing.show"), "from-amber-400 to-orange-500"],
-                        ].map(([Icon, label, href, gradient]) => (
+                        ].filter(Boolean).map(([Icon, label, href, gradient]) => (
                             <Link key={label} href={href} className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
                                 <span className={`rounded-xl bg-gradient-to-br ${gradient} p-2.5 text-white`}><Icon className="h-4 w-4" /></span>
                                 <span className="text-sm font-bold text-slate-800 group-hover:text-indigo-600 dark:text-slate-100">{label}</span>

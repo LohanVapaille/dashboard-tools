@@ -24,6 +24,7 @@ import LocationSearchInput from "@/Components/Itinerary/LocationSearchInput";
 import StayPropertyCard from "@/Components/Stays/StayPropertyCard";
 import StayDetailModal from "@/Components/Stays/StayDetailModal";
 import StaysMap from "@/Components/Stays/StaysMap";
+import TripReservations, { usePartnerBooking } from "@/Components/Reservations/TripReservations";
 import { firstError, formatPrice } from "@/Utils/flights";
 import { amenityMeta, formatDay, nightsBetween, partnerMeta, typeMeta } from "@/Utils/stays";
 
@@ -72,10 +73,12 @@ function Filters({ filters, setFilters, counts, priceBounds, currency, maxDistan
             </div>
 
             <div className="space-y-2">
-                <label className="flex cursor-pointer items-center justify-between gap-2 rounded-xl bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
-                    <span className="flex items-center gap-2 font-semibold text-emerald-800 dark:text-emerald-300"><Zap className="h-4 w-4" /> Réservable ici</span>
-                    <input type="checkbox" checked={filters.bookableOnly} onChange={(event) => setFilters((current) => ({ ...current, bookableOnly: event.target.checked }))} className="rounded text-emerald-600" />
-                </label>
+                {counts.bookable > 0 && (
+                    <label className="flex cursor-pointer items-center justify-between gap-2 rounded-xl bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
+                        <span className="flex items-center gap-2 font-semibold text-emerald-800 dark:text-emerald-300"><Zap className="h-4 w-4" /> Réservable ici</span>
+                        <input type="checkbox" checked={filters.bookableOnly} onChange={(event) => setFilters((current) => ({ ...current, bookableOnly: event.target.checked }))} className="rounded text-emerald-600" />
+                    </label>
+                )}
                 <label className="flex cursor-pointer items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800">
                     <span className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200"><ShieldCheck className="h-4 w-4 text-emerald-600" /> Annulation possible</span>
                     <input type="checkbox" checked={filters.freeCancellation} onChange={(event) => setFilters((current) => ({ ...current, freeCancellation: event.target.checked }))} className="rounded text-emerald-600" />
@@ -166,6 +169,7 @@ function Filters({ filters, setFilters, counts, priceBounds, currency, maxDistan
 
 export default function StaysTab({ trip }) {
     useAffiliateLinks();
+    const partner = usePartnerBooking(trip, ["stay"]);
     const stays = trip.stays || [];
     const travelers = Math.min(16, trip.travelers || 1 + (trip.avatars?.length || 0));
     const [stayId, setStayId] = useState(stays[0]?.id ?? null);
@@ -297,8 +301,9 @@ export default function StaysTab({ trip }) {
     const maxDistance = Math.max(1, Math.ceil(Math.max(radius, ...all.map((property) => property.distance_km || 0))));
 
     const counts = useMemo(() => {
-        const result = { types: {}, amenities: {}, rated: 0 };
+        const result = { types: {}, amenities: {}, rated: 0, bookable: 0 };
         all.forEach((property) => {
+            if (property.bookable) result.bookable += 1;
             result.types[property.type] = (result.types[property.type] || 0) + 1;
             (property.amenities || []).forEach((key) => (result.amenities[key] = (result.amenities[key] || 0) + 1));
             if (property.rating) result.rated += 1;
@@ -334,6 +339,34 @@ export default function StaysTab({ trip }) {
     const activeFilters = filters.types.length + filters.amenities.length + (filters.minStars ? 1 : 0) + (filters.minRating ? 1 : 0)
         + (filters.freeCancellation ? 1 : 0) + (filters.bookableOnly ? 1 : 0) + (filters.maxPrice != null ? 1 : 0) + (filters.maxDistance != null ? 1 : 0) + (filters.text ? 1 : 0);
     const nights = nightsBetween(dates.checkIn, dates.checkOut);
+    const stayDraft = (property, provider) => ({
+        kind: "stay",
+        title: property.name,
+        provider,
+        address: property.address || property.city || searchedAt?.place_name || "",
+        starts_at: `${property.check_in_date || searchedAt?.check_in}T${property.check_in || "15:00"}`.slice(0, 16),
+        ends_at: `${property.check_out_date || searchedAt?.check_out}T${property.check_out || "11:00"}`.slice(0, 16),
+        travelers: searchedAt?.adults,
+    });
+    const areaDraft = (provider) => ({
+        kind: "stay",
+        title: `Logement à ${searchedAt?.place_name || ""}`.trim(),
+        provider,
+        address: searchedAt?.place_name || "",
+        starts_at: searchedAt?.check_in ? `${searchedAt.check_in}T15:00` : "",
+        ends_at: searchedAt?.check_out ? `${searchedAt.check_out}T11:00` : "",
+        travelers: searchedAt?.adults,
+    });
+    const booked = (trip.reservations || []).some((reservation) => reservation.kind === "stay");
+    const reservations = (
+        <TripReservations
+            trip={trip}
+            kinds={["stay"]}
+            title="Mes logements réservés"
+            accent="text-emerald-700 dark:text-emerald-300"
+            empty="Aucun logement enregistré. Après une réservation chez un partenaire, retrouvez-la ici avec sa référence et ses dates."
+        />
+    );
     const busy = loading.offers || loading.listings;
 
     // Aucun résultat autour d'une région, d'un parc… : on propose les grandes villes proches.
@@ -350,7 +383,8 @@ export default function StaysTab({ trip }) {
 
     return (
         <div className="space-y-6">
-            {selected && <StayDetailModal property={selected} trip={trip} search={searchedAt} onClose={() => setSelected(null)} />}
+            {selected && <StayDetailModal property={selected} trip={trip} search={searchedAt} onPartner={(url, provider) => partner.open(url, stayDraft(selected, provider))} onClose={() => setSelected(null)} />}
+            {partner.element}
 
             <section className="relative z-20 rounded-3xl bg-gradient-to-br from-emerald-500 via-teal-600 to-sky-600 shadow-xl shadow-teal-500/20">
                 <div className="flex flex-wrap items-center justify-between gap-4 px-6 pb-4 pt-6 text-white">
@@ -422,6 +456,8 @@ export default function StaysTab({ trip }) {
                 </form>
             </section>
 
+            {booked && reservations}
+
             {cityHints && (
                 <div className="flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/30 sm:flex-row sm:items-center">
                     <p className="flex items-start gap-2 text-sm text-emerald-900 dark:text-emerald-200 sm:max-w-sm">
@@ -463,13 +499,15 @@ export default function StaysTab({ trip }) {
             {offers && (
                 <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
                     <span className="mr-1 text-xs font-bold uppercase tracking-wide text-slate-500">Comparer toute la zone sur</span>
-                    {offers.partners.map((partner) => (
-                        <a key={partner.key} href={partner.url} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold ${partnerMeta[partner.key]?.color || "bg-slate-100"}`}>
-                            {partner.name} <ExternalLink className="h-3 w-3" />
-                        </a>
+                    {offers.partners.map((link) => (
+                        <button key={link.key} type="button" onClick={() => partner.open(link.url, areaDraft(link.name))} className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition hover:-translate-y-0.5 ${partnerMeta[link.key]?.color || "bg-slate-100"}`}>
+                            {link.name} <ExternalLink className="h-3 w-3" />
+                        </button>
                     ))}
                     {!offers.instant_booking && (
-                        <span className="ml-auto text-[11px] text-slate-400">Réservation instantanée bientôt disponible</span>
+                        <span className="w-full text-[11px] text-slate-500">
+                            La réservation et le paiement se font chez le partenaire choisi : c’est lui le vendeur, et votre interlocuteur en cas de changement ou d’annulation. Nous pouvons percevoir une commission, sans surcoût pour vous.
+                        </span>
                     )}
                 </div>
             )}
@@ -557,6 +595,8 @@ export default function StaysTab({ trip }) {
                     <p className="text-[11px] text-slate-400">Liste des hébergements : © contributeurs OpenStreetMap (ODbL). Les prix affichés incluent les taxes et nos {offers?.pricing?.fee_label?.toLowerCase() || "frais de service"} ({offers?.pricing?.fee_percent ?? 5} %).</p>
                 </section>
             )}
+
+            {!booked && reservations}
 
             {showFilters && (
                 <div className="fixed inset-0 z-[105] flex justify-end bg-slate-950/50 lg:hidden" onMouseDown={(event) => event.target === event.currentTarget && setShowFilters(false)}>

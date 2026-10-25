@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { ChevronLeft, ChevronRight, Download, Image as ImageIcon, ImagePlus, LoaderCircle, Trash2, UploadCloud, X } from "lucide-react";
 import { useTripPermissions } from "@/Contexts/TripPermissionsContext";
+import { confirmDialog } from "@/Components/ConfirmDialog";
 
 const MAX_SIZE = 10 * 1024 * 1024;
 
@@ -92,7 +93,7 @@ export default function TripPhotos({ trip }) {
     };
 
     const remove = async (photo) => {
-        if (!confirm("Supprimer cette photo ?")) return;
+        if (!(await confirmDialog({ title: "Supprimer cette photo ?", message: "Elle disparaîtra de l’album pour tous les membres du voyage.", confirmLabel: "Supprimer" }))) return;
         setError("");
         try {
             await axios.delete(route("trips.photos.destroy", photo.id));

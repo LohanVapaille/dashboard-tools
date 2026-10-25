@@ -52,6 +52,11 @@ class Trip extends Model
         return $this->hasMany(TripNote::class)->orderBy('position');
     }
 
+    public function reservations()
+    {
+        return $this->hasMany(TripReservation::class)->orderByRaw("starts_at is null")->orderBy("starts_at")->orderBy("id");
+    }
+
     public function participants()
     {
         return $this->hasMany(TripParticipant::class);
@@ -77,6 +82,14 @@ class Trip extends Model
         static::creating(function (Trip $trip) {
             $trip->share_token = $trip->share_token ?: Str::random(32);
         });
+    }
+
+    public const FREE_EXPENSE_LIMIT = 15;
+
+    /** Fonctions Premium du voyage : actives si l'organisateur ou la personne connectée est abonné. */
+    public function hasPremium($viewer = null): bool
+    {
+        return (bool) ($this->user?->hasPremiumAccess() || $viewer?->hasPremiumAccess());
     }
 
     // Un invité est propriétaire via guest_token, un utilisateur via user_id.

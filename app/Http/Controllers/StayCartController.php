@@ -9,6 +9,7 @@ use App\Services\Stays\StayProviders;
 use App\Services\Stays\StaySearchQuery;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
@@ -44,9 +45,17 @@ class StayCartController extends Controller
         try {
             // Tarifs à jour puis blocage du prix : garantit la disponibilité et le montant.
             $provider = $providers->forProperty($validated['search_result_id']);
-            $details = $provider->rates($validated['search_result_id'], $context);
-            $room = collect($details['rooms'])->first(fn ($room) => collect($room['rates'])->contains('id', $validated['rate_id']));
-            $rate = $room ? collect($room['rates'])->firstWhere('id', $validated['rate_id']) : null;
+            $shown = Cache::get(StaySearchController::rateCacheKey($validated['search_result_id'], $validated['rate_id']));
+            if ($shown) {
+                // Offre affichée à l'utilisateur ; le prebook juste après confirme disponibilité et prix.
+                $details = ['property' => $shown['property']];
+                $room = $shown['room'];
+                $rate = $shown['rate'];
+            } else {
+                $details = $provider->rates($validated['search_result_id'], $context);
+                $room = collect($details['rooms'])->first(fn ($room) => collect($room['rates'])->contains('id', $validated['rate_id']));
+                $rate = $room ? collect($room['rates'])->firstWhere('id', $validated['rate_id']) : null;
+            }
             if (!$rate) {
                 throw new FlightProviderException('Cette chambre n’est plus disponible. Choisissez une autre offre.');
             }

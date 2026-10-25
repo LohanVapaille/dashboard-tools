@@ -21,6 +21,7 @@ import {
 import DateRangePicker from "@/Components/DateRangePicker";
 import LocationSearchInput from "@/Components/Itinerary/LocationSearchInput";
 import { useTripPermissions } from "@/Contexts/TripPermissionsContext";
+import { confirmDialog } from "@/Components/ConfirmDialog";
 
 const SECTIONS = [
     ["general", "Général", Settings],
@@ -87,14 +88,14 @@ export default function TripSettingsModal({ trip, visibleTabs, onTabsChange, ini
         }
     };
 
-    const destroy = () => {
-        if (window.prompt(`Pour supprimer définitivement ce voyage, tapez son nom : ${trip.title}`) === trip.title) {
+    const destroy = async () => {
+        if (await confirmDialog({ title: "Supprimer définitivement ce voyage ?", message: "Programme, notes, photos et accès des participants seront effacés. Cette action est irréversible.", confirmLabel: "Supprimer le voyage", typeToConfirm: trip.title })) {
             router.delete(route("trips.destroy", trip.id));
         }
     };
 
-    const leave = () => {
-        if (window.confirm("Quitter ce voyage ? Vous n’y aurez plus accès, sauf nouvelle invitation.")) router.delete(route("trips.leave", trip.id));
+    const leave = async () => {
+        if (await confirmDialog({ title: "Quitter ce voyage ?", message: "Vous n’y aurez plus accès, sauf nouvelle invitation.", confirmLabel: "Quitter", tone: "warning" })) router.delete(route("trips.leave", trip.id));
     };
 
     const errors = form.errors;

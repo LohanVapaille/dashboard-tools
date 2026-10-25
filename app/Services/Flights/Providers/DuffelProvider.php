@@ -25,12 +25,14 @@ class DuffelProvider implements FlightProvider
 
     public function enabled(): bool
     {
-        return config('flights.providers.duffel.enabled') && $this->client->configured();
+        return config('flights.providers.duffel.enabled') && $this->client->configured()
+            && (config('commerce.direct_booking') || config('flights.providers.duffel.partner_search'));
     }
 
     public function bookable(): bool
     {
-        return true;
+        // Modèle partenaires : les offres servent de comparaison, l'achat se fait chez Aviasales.
+        return (bool) config('commerce.direct_booking');
     }
 
     public function search(FlightSearchQuery $query): array
@@ -147,8 +149,9 @@ class DuffelProvider implements FlightProvider
             'id' => $offer['id'],
             'provider' => $this->key(),
             'provider_label' => $this->label(),
-            'bookable' => true,
-            'external_url' => null,
+            'bookable' => $this->bookable(),
+            'external_url' => $this->bookable() ? null : self::partnerUrl($slice, $first, $passengersCount),
+            'partner_label' => $this->bookable() ? null : 'Aviasales',
             'airline' => [
                 'name' => $offer['owner']['name'] ?? 'Compagnie aérienne',
                 'code' => $offer['owner']['iata_code'] ?? null,
@@ -219,5 +222,21 @@ class DuffelProvider implements FlightProvider
             'name' => $place['name'] ?? null,
             'city' => $place['city_name'] ?? ($place['city']['name'] ?? null),
         ];
+    }
+
+    /** Recherche Aviasales préremplie (trajet, date, voyageurs) avec l'identifiant d'affiliation. */
+    public static function partnerUrl(array $slice, array $firstSegment, int $passengers): ?string
+    {
+        $origin = $slice['origin']['iata_code'] ?? $firstSegment['origin']['iata_code'] ?? null;
+        $destination = $slice['destination']['iata_code'] ?? null;
+        $date = $firstSegment['departing_at'] ?? null;
+        if (!$origin || !$destination || !$date) {
+            return null;
+        }
+
+        $marker = config('flights.providers.travelpayouts.marker');
+
+        return 'https://www.aviasales.com/search/' . strtoupper($origin) . date('dm', strtotime($date)) . strtoupper($destination) . max(1, min(9, $passengers))
+            . ($marker ? '?marker=' . rawurlencode((string) $marker) : '');
     }
 }

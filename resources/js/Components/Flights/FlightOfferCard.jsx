@@ -135,7 +135,7 @@ export function SegmentDetails({ offer }) {
     );
 }
 
-export default function FlightOfferCard({ offer, onSelect, actionLabel = "Choisir ce vol", highlight }) {
+export default function FlightOfferCard({ offer, onSelect, onPartner, actionLabel = "Choisir ce vol", highlight }) {
     const [open, setOpen] = useState(false);
 
     return (
@@ -149,7 +149,7 @@ export default function FlightOfferCard({ offer, onSelect, actionLabel = "Choisi
                     <div className="min-w-0">
                         <p className="truncate font-bold text-slate-900 dark:text-white">{offer.airline?.name}</p>
                         <p className="truncate text-xs text-slate-500">
-                            {offer.segments?.[0]?.flight_number || offer.provider_label}
+                            {offer.segments?.[0]?.flight_number || offer.flight_number || offer.provider_label}
                             {offer.cabin && ` · ${offer.cabin}`}
                         </p>
                     </div>
@@ -162,7 +162,7 @@ export default function FlightOfferCard({ offer, onSelect, actionLabel = "Choisi
                         <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{formatPrice(offer.total_amount, offer.currency)}</p>
                         <p className="text-[11px] text-slate-500">
                             {offer.passengers_count > 1 ? `${formatPrice(offer.per_passenger_total, offer.currency)} / pers. · ` : ""}
-                            taxes et frais inclus
+                            {offer.bookable ? "taxes et frais inclus" : offer.price_source === "aviasales" ? "prix constaté sur Aviasales" : "prix indicatif"}
                         </p>
                     </div>
                     {offer.bookable ? (
@@ -173,6 +173,14 @@ export default function FlightOfferCard({ offer, onSelect, actionLabel = "Choisi
                         >
                             {actionLabel}
                         </button>
+                    ) : onPartner ? (
+                        <button
+                            type="button"
+                            onClick={() => onPartner(offer)}
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-rose-500 px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-orange-500/20 transition hover:from-orange-600 hover:to-rose-600"
+                        >
+                            Réserver sur {offer.partner_label || offer.provider_label} <ExternalLink className="h-3.5 w-3.5" />
+                        </button>
                     ) : (
                         <a
                             href={offer.external_url}
@@ -180,7 +188,7 @@ export default function FlightOfferCard({ offer, onSelect, actionLabel = "Choisi
                             rel="noreferrer"
                             className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200"
                         >
-                            Voir chez {offer.provider_label} <ExternalLink className="h-3.5 w-3.5" />
+                            {offer.partner_label ? `Réserver sur ${offer.partner_label}` : `Voir chez ${offer.provider_label}`} <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                     )}
                 </div>

@@ -134,7 +134,7 @@ class TripController extends Controller
         $user = Auth::user();
         $guestToken = request()->cookie('guest_token');
 
-        $trip->load(['stays.days.activities', 'stays.days.blocks', 'transitions', 'notes', 'photos', 'participants.user:id,name']);
+        $trip->load(['stays.days.activities', 'stays.days.blocks', 'transitions', 'notes', 'photos', 'reservations', 'participants.user:id,name']);
 
         $trip->permissions = [
             'isOwner' => $trip->isOwner($user, $guestToken),
@@ -144,6 +144,12 @@ class TripController extends Controller
             'canManageAccess' => $trip->canManageAccess($user, $guestToken),
             'canManageRoles' => $trip->canManageRoles($user, $guestToken),
         ];
+
+        $trip->premium = $trip->hasPremium($user);
+
+        // Pays de chaque étape : suggestions eSIM, location de voiture… adaptées à la destination.
+        $places = app(\App\Services\Places\MajorCities::class);
+        $trip->stays->each(fn ($stay) => $stay->setAttribute('country', $places->countryOfPlace($stay->location_name)));
 
         $trip->avatars = $trip->participants
             ->where('status', 'accepted')
@@ -156,6 +162,23 @@ class TripController extends Controller
         return Inertia::render('Trips/Show', [
             'trip' => $trip,
             'guestWarning' => session('guestWarning'),
+        ]);
+    }
+
+    /** Carnet de voyage imprimable (ou enregistrable en PDF depuis le navigateur) : fonction Premium. */
+    public function printable(Trip $trip)
+    {
+        $this->authorize('view', $trip);
+
+        if (!$trip->hasPremium(Auth::user())) {
+            return redirect()->route('billing.show')->with('status', 'Le carnet de voyage PDF fait partie de l’offre Premium.');
+        }
+
+        $trip->load(['stays.days.activities', 'transitions.fromStay:id,location_name', 'transitions.toStay:id,location_name', 'notes']);
+
+        return Inertia::render('Trips/Print', [
+            'trip' => $trip,
+            'budget' => (new \App\Services\Budget\TripBudget($trip))->summary(),
         ]);
     }
 

@@ -53,6 +53,11 @@ return [
             'guest_nationality' => env('LITEAPI_GUEST_NATIONALITY', 'FR'),
             'timeout' => (int) env('LITEAPI_TIMEOUT', 8),
             'max_hotels' => (int) env('LITEAPI_MAX_HOTELS', 60),
+            // Mode partenaires : paiement intégré à la page par le module Nuitée. Nuitée encaisse, rembourse
+            // et reverse une commission (marge en %, ajoutée au prix net ; vide = marge par défaut du compte).
+            // Sur un site public, le prix doit rester au moins égal au prix de vente conseillé par l'hôtel.
+            'embedded_checkout' => filter_var(env('LITEAPI_EMBEDDED_CHECKOUT', false), FILTER_VALIDATE_BOOLEAN),
+            'margin' => is_numeric(env('LITEAPI_MARGIN')) ? (float) env('LITEAPI_MARGIN') : null,
         ],
         'duffel_stays' => [
             'enabled' => filter_var(env('DUFFEL_STAYS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),

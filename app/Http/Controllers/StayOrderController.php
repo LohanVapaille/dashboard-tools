@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\StayBooking;
 use App\Models\StayOrder;
+use App\Models\TripReservation;
 use App\Services\Flights\FlightProviderException;
 use App\Services\Stays\StayProviders;
 use App\Services\Stays\StayOrderProcessor;
@@ -47,6 +48,20 @@ class StayOrderController extends Controller
 
         $booking->update(['status' => 'cancelled', 'cancelled_at' => now()]);
 
+        // Paiement Nuitée : c'est Nuitée qui rembourse la carte du client, rien à faire côté Stripe.
+        if ($order->payment_method === 'liteapi_sdk') {
+            if ($refund > 0) {
+                $booking->increment('refunded_amount', $refund);
+                $order->increment('refunded_amount', $refund);
+            }
+            TripReservation::where('details->stay_booking_id', $booking->id)->delete();
+            $processor->finalize($order);
+
+            return back()->with('status', $refund > 0
+                ? 'Réservation annulée. Nuitée vous rembourse ' . number_format($refund, 2, ',', ' ') . ' ' . $order->currency . ' sous 5 à 10 jours.'
+                : 'Réservation annulée. Ce tarif n’ouvrait plus droit à remboursement.');
+        }
+
         $refunded = true;
         if ($refund > 0) {
             $refunded = $processor->refundBooking($order, $booking, $refund, 'voluntary_cancellation');
@@ -77,6 +92,7 @@ class StayOrderController extends Controller
         return [
             'type' => 'stay',
             'reference' => $order->reference,
+            'payment_method' => $order->payment_method,
             'status' => $order->status,
             'currency' => $order->currency,
             'stays_amount' => (float) $order->stays_amount,

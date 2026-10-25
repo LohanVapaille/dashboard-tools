@@ -10,11 +10,14 @@ import {
     LoaderCircle,
     LocateFixed,
     Lock,
+    MapPin,
+    Plane,
     PlaneLanding,
     PlaneTakeoff,
     Search,
     ShieldCheck,
     ShoppingCart,
+    TrainFront,
     Users,
 } from "lucide-react";
 import { useAffiliateLinks } from "@/Utils/affiliate";
@@ -25,6 +28,9 @@ import FlightResults, { ResultsSkeleton } from "@/Components/Flights/FlightResul
 import { AirlineLogo, FlightTimeline, OfferBadges, PriceBreakdown } from "@/Components/Flights/FlightOfferCard";
 import BaggageSelector, { baggagePayload, baggageTotal } from "@/Components/Flights/BaggageSelector";
 import { firstError, formatPrice, localDate, placeLabel } from "@/Utils/flights";
+import { flightPartnerLinks, groundPartnerLinks } from "@/Utils/partners";
+import TripReservations, { usePartnerBooking } from "@/Components/Reservations/TripReservations";
+import { TRANSPORT_KINDS } from "@/Components/Reservations/kinds";
 
 const HOME_KEY = "travelplanner.flights.home";
 const today = () => {
@@ -53,13 +59,13 @@ const cabins = {
     first: "Première",
 };
 
-function Stepper({ step, roundtrip, selection, onStep }) {
+function Stepper({ step, roundtrip, selection, onStep, free = false }) {
     const steps = [
         { key: "outbound", label: "Vol aller", done: Boolean(selection.outbound) },
         ...(roundtrip ? [{ key: "return", label: "Vol retour", done: Boolean(selection.return) }] : []),
-        { key: "review", label: "Récapitulatif", done: false },
+        ...(free ? [] : [{ key: "review", label: "Récapitulatif", done: false }]),
     ];
-    const reachable = (key) => key === "outbound" || (key === "return" && selection.outbound) || (key === "review" && selection.outbound && (!roundtrip || selection.return));
+    const reachable = (key) => key === "outbound" || (key === "return" && (free || selection.outbound)) || (key === "review" && selection.outbound && (!roundtrip || selection.return));
 
     return (
         <ol className="flex items-center gap-2 overflow-x-auto">
@@ -124,6 +130,103 @@ function SelectedFlight({ label, offer, onChange, tone = "sky" }) {
     );
 }
 
+const cityName = (place) => (place || "").split(",")[0].trim();
+
+const CityField = ({ label, icon: Icon, value, onChange }) => (
+    <label className="block">
+        <span className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500"><Icon className="h-3.5 w-3.5" /> {label}</span>
+        <input value={value} onChange={(event) => onChange(event.target.value)} placeholder="Ville" className="w-full rounded-xl border-slate-300 text-sm font-semibold focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+    </label>
+);
+
+/** Trajets train / bus / covoiturage : réservés chez les partenaires, rangés ensuite dans le voyage. */
+function GroundSearch({ trip, onOpen }) {
+    const stays = trip.stays || [];
+    // Trajets du voyage : départ → 1re étape, étape → étape, dernière étape → retour.
+    const legs = useMemo(() => {
+        const points = [
+            ...(trip.origin_name ? [{ name: trip.origin_name, date: null }] : []),
+            ...stays.map((stay) => ({ name: stay.location_name, date: stay.arrival_date, leave: stay.departure_date })),
+        ];
+        const list = points.slice(1).map((point, index) => ({ from: points[index].name, to: point.name, date: points[index].leave || point.date }));
+        if (trip.origin_name && stays.length) list.push({ from: stays[stays.length - 1].location_name, to: trip.origin_name, date: stays[stays.length - 1].departure_date });
+        return list.filter((leg) => cityName(leg.from) && cityName(leg.from) !== cityName(leg.to));
+    }, [trip]);
+
+    const [form, setForm] = useState(() => ({
+        from: cityName(legs[0]?.from || trip.origin_name),
+        to: cityName(legs[0]?.to || stays[0]?.location_name),
+        date: futureOrEmpty(legs[0]?.date || trip.start_date),
+        passengers: Math.min(9, trip.travelers || 1),
+    }));
+    const links = groundPartnerLinks(form);
+    const draft = (provider) => ({
+        kind: "train",
+        title: `${form.from} → ${form.to}`,
+        provider,
+        origin: form.from,
+        destination: form.to,
+        starts_at: form.date ? `${form.date}T08:00` : "",
+        travelers: form.passengers,
+    });
+
+    return (
+        <div className="space-y-4 rounded-3xl bg-white p-5 dark:bg-slate-800">
+            {legs.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Trajets du voyage</span>
+                    {legs.map((leg, index) => {
+                        const active = cityName(leg.from) === form.from && cityName(leg.to) === form.to;
+                        return (
+                            <button
+                                key={index}
+                                type="button"
+                                onClick={() => setForm((current) => ({ ...current, from: cityName(leg.from), to: cityName(leg.to), date: futureOrEmpty(leg.date) || current.date }))}
+                                className={`rounded-full px-3 py-1.5 text-xs font-bold ring-1 transition ${active ? "bg-indigo-600 text-white ring-indigo-600" : "bg-white text-slate-600 ring-slate-200 hover:bg-indigo-50 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700"}`}
+                            >
+                                {cityName(leg.from)} → {cityName(leg.to)}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+            <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr_auto_auto] md:items-end">
+                <CityField label="Départ" icon={TrainFront} value={form.from} onChange={(from) => setForm((current) => ({ ...current, from }))} />
+                <button type="button" onClick={() => setForm((current) => ({ ...current, from: current.to, to: current.from }))} title="Inverser" className="mx-auto mb-1 rounded-full border border-slate-200 bg-white p-2 text-slate-500 shadow-sm transition hover:rotate-180 hover:text-indigo-600 dark:border-slate-600 dark:bg-slate-900">
+                    <ArrowLeftRight className="h-4 w-4" />
+                </button>
+                <CityField label="Arrivée" icon={MapPin} value={form.to} onChange={(to) => setForm((current) => ({ ...current, to }))} />
+                <DateRangePicker single label="Date" startPlaceholder="Choisir" minDate={today()} startDate={form.date} onChange={(date) => setForm((current) => ({ ...current, date }))} />
+                <label className="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-500 dark:border-slate-600">
+                    <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> Voyageurs</span>
+                    <select value={form.passengers} onChange={(event) => setForm((current) => ({ ...current, passengers: Number(event.target.value) }))} className="block w-full min-w-[4rem] border-0 bg-transparent py-0 pl-0 pr-7 text-sm font-bold text-slate-800 focus:ring-0 dark:text-white">
+                        {Array.from({ length: 9 }, (_, index) => index + 1).map((count) => <option key={count} value={count}>{count}</option>)}
+                    </select>
+                </label>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {links.map((link) => (
+                    <button
+                        key={link.key}
+                        type="button"
+                        onClick={() => onOpen(link.url, draft(link.label))}
+                        className="group flex items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700"
+                    >
+                        <span>
+                            <span className={`inline-block rounded-lg px-2.5 py-1 text-sm font-black ${link.color}`}>{link.label}</span>
+                            <span className="mt-1.5 block text-xs text-slate-500">{link.hint}</span>
+                        </span>
+                        <ExternalLink className="h-4 w-4 text-slate-300 transition group-hover:text-indigo-500" />
+                    </button>
+                ))}
+            </div>
+            <p className="text-[11px] text-slate-400">
+                Omio et BlaBlaCar s’ouvrent avec votre trajet pré-rempli. Le partenaire vend le billet et encaisse le paiement ; nous pouvons percevoir une commission, sans surcoût pour vous.
+            </p>
+        </div>
+    );
+}
+
 export default function TransportTab({ trip }) {
     useAffiliateLinks();
     const { props } = usePage();
@@ -155,6 +258,9 @@ export default function TransportTab({ trip }) {
     const [selection, setSelection] = useState({ outbound: null, return: null });
     const [cart, setCart] = useState({ loading: false, added: false, error: "" });
     const [bags, setBags] = useState({ outbound: {}, return: {} });
+    const [mode, setMode] = useState("flight");
+    const direct = Boolean(props.commerce?.direct_booking);
+    const partner = usePartnerBooking(trip, TRANSPORT_KINDS);
 
     // Pré-remplissage : aéroports les plus proches des séjours du voyage.
     useEffect(() => {
@@ -226,13 +332,14 @@ export default function TransportTab({ trip }) {
         return: { origin: returnFrom || destination, destination: returnTo || origin, date: dates.return },
     };
 
-    const searchKey = (leg) => {
+    const searchKey = (leg, date) => {
         const params = legParams[leg];
-        return [params.origin?.code, params.destination?.code, params.date, passengers, cabin].join("|");
+        return [params.origin?.code, params.destination?.code, date || params.date, passengers, cabin].join("|");
     };
 
-    const search = async (leg) => {
-        const params = legParams[leg];
+    // `date` : relance depuis le calendrier des prix, sans attendre la mise à jour de l'état.
+    const search = async (leg, date) => {
+        const params = { ...legParams[leg], ...(date ? { date } : {}) };
         if (!params.origin || !params.destination || !params.date) {
             setErrors((current) => ({ ...current, [leg]: "Choisissez les aéroports et la date du vol." }));
             return;
@@ -247,7 +354,7 @@ export default function TransportTab({ trip }) {
                 passengers,
                 cabin,
             });
-            setResults((current) => ({ ...current, [leg]: { ...response.data, key: searchKey(leg) } }));
+            setResults((current) => ({ ...current, [leg]: { ...response.data, key: searchKey(leg, params.date) } }));
         } catch (error) {
             setResults((current) => ({ ...current, [leg]: null }));
             setErrors((current) => ({ ...current, [leg]: firstError(error, "La recherche de vols a échoué. Réessayez.") }));
@@ -292,6 +399,7 @@ export default function TransportTab({ trip }) {
         window.scrollTo({ top: document.getElementById("transport-top")?.offsetTop ?? 0, behavior: "smooth" });
     };
 
+    const leg = step === "return" ? "return" : "outbound";
     const chosen = [selection.outbound, roundtrip ? selection.return : null].filter(Boolean);
     const bagsTotal = baggageTotal(bags.outbound) + (roundtrip ? baggageTotal(bags.return) : 0);
     const total = chosen.reduce((sum, offer) => sum + offer.total_amount, 0) + bagsTotal;
@@ -317,13 +425,44 @@ export default function TransportTab({ trip }) {
         }
     };
 
+    const offerDraft = (offer) => ({
+        kind: "flight",
+        title: `${offer.airline?.name || "Vol"} · ${offer.origin?.city || offer.origin?.code} → ${offer.destination?.city || offer.destination?.code}`,
+        provider: offer.partner_label || offer.provider_label,
+        origin: placeLabel(offer.origin),
+        destination: placeLabel(offer.destination),
+        starts_at: offer.departure?.slice(0, 16),
+        ends_at: offer.arrival?.slice(0, 16),
+        price: offer.total_amount,
+        currency: offer.currency,
+        travelers: offer.passengers_count,
+        details: {
+            carrier: offer.airline?.name || "",
+            number: offer.segments?.map((segment) => segment.flight_number).filter(Boolean).join(" · ") || offer.flight_number || "",
+            ...(offer.cabin ? { cabin: offer.cabin } : {}),
+        },
+    });
+    const openOffer = direct
+        ? undefined
+        : (offer) => {
+              partner.open(offer.external_url, offerDraft(offer));
+              if (step === "outbound" && roundtrip) goTo("return");
+          };
+    const comparators = flightPartnerLinks({
+        origin: legParams[leg]?.origin?.code,
+        destination: legParams[leg]?.destination?.code,
+        date: legParams[leg]?.date,
+        passengers,
+        marker: props.affiliate?.marker,
+        project: props.affiliate?.project_id,
+    });
+
     const swap = () => {
         setOrigin(destination);
         setDestination(origin);
         setSelection({ outbound: null, return: null });
     };
 
-    const leg = step === "return" ? "return" : "outbound";
     const formReady = useMemo(() => Boolean(origin && destination && dates.outbound && (!roundtrip || dates.return)), [origin, destination, dates, roundtrip]);
 
     return (
@@ -332,16 +471,29 @@ export default function TransportTab({ trip }) {
                 <div className="flex flex-wrap items-center justify-between gap-4 px-6 pb-4 pt-6 text-white">
                     <div>
                         <h2 className="flex items-center gap-2 text-2xl font-black">
-                            <PlaneTakeoff className="h-6 w-6" /> Réserver vos vols
+                            {mode === "flight" ? <PlaneTakeoff className="h-6 w-6" /> : <TrainFront className="h-6 w-6" />} {mode === "flight" ? "Trouver vos vols" : "Trains, bus et covoiturage"}
                         </h2>
                         <p className="mt-1 text-sm text-indigo-100">
-                            Plus de 300 compagnies comparées · prix taxes et frais inclus · paiement sécurisé
+                            {props.commerce?.direct_booking
+                                ? "Plus de 300 compagnies comparées · prix taxes et frais inclus · paiement sécurisé"
+                                : "Plus de 300 compagnies comparées · achat chez notre partenaire Aviasales, sans frais ajoutés"}
                         </p>
                     </div>
-                    <Stepper step={step} roundtrip={roundtrip} selection={selection} onStep={goTo} />
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="inline-flex rounded-xl bg-white/15 p-1 backdrop-blur">
+                            {[["flight", Plane, "Avion"], ["ground", TrainFront, "Train & bus"]].map(([key, Icon, label]) => (
+                                <button key={key} type="button" onClick={() => setMode(key)} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${mode === key ? "bg-white text-indigo-700 shadow" : "text-white/80 hover:text-white"}`}>
+                                    <Icon className="h-3.5 w-3.5" /> {label}
+                                </button>
+                            ))}
+                        </div>
+                        {mode === "flight" && <Stepper step={step} roundtrip={roundtrip} selection={selection} onStep={goTo} free={!direct} />}
+                    </div>
                 </div>
 
-                {step === "outbound" && (
+                {mode === "ground" && <GroundSearch trip={trip} onOpen={partner.open} />}
+
+                {mode === "flight" && step === "outbound" && (
                     <form
                         onSubmit={(event) => {
                             event.preventDefault();
@@ -446,7 +598,7 @@ export default function TransportTab({ trip }) {
                     </form>
                 )}
 
-                {step === "return" && (
+                {mode === "flight" && step === "return" && (
                     <form
                         onSubmit={(event) => {
                             event.preventDefault();
@@ -454,7 +606,13 @@ export default function TransportTab({ trip }) {
                         }}
                         className="space-y-4 rounded-3xl bg-white p-5 dark:bg-slate-800"
                     >
-                        <SelectedFlight label="Aller choisi" offer={selection.outbound} onChange={() => setStep("outbound")} />
+                        {selection.outbound ? (
+                            <SelectedFlight label="Aller choisi" offer={selection.outbound} onChange={() => setStep("outbound")} />
+                        ) : (
+                            <button type="button" onClick={() => setStep("outbound")} className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:underline dark:text-indigo-400">
+                                <PlaneTakeoff className="h-3.5 w-3.5" /> Revenir aux vols aller
+                            </button>
+                        )}
                         <div className="grid items-end gap-4 md:grid-cols-[1fr_1fr_1fr_auto]">
                             <AirportCombobox
                                 label="Retour depuis"
@@ -481,7 +639,7 @@ export default function TransportTab({ trip }) {
                     </form>
                 )}
 
-                {step === "review" && (
+                {mode === "flight" && step === "review" && (
                     <div className="space-y-4 rounded-3xl bg-white p-5 dark:bg-slate-800">
                         <SelectedFlight label={roundtrip ? "Aller" : "Aller simple"} offer={selection.outbound} onChange={() => setStep("outbound")} />
                         {roundtrip && selection.return && (
@@ -491,12 +649,22 @@ export default function TransportTab({ trip }) {
                 )}
             </section>
 
-            {step !== "review" && (
+            {mode === "flight" && step !== "review" && (
                 <section className="space-y-4">
                     <h3 className="flex flex-wrap items-center gap-2 text-lg font-black text-slate-900 dark:text-white">
                         <span className={`rounded-lg px-2 py-0.5 text-xs font-bold uppercase text-white ${leg === "return" ? "bg-violet-500" : "bg-sky-500"}`}>
                             {leg === "return" ? "Étape 2 · Retour" : "Étape 1 · Aller"}
                         </span>
+                        {!direct && roundtrip && (
+                            <button
+                                type="button"
+                                onClick={() => goTo(leg === "return" ? "outbound" : "return")}
+                                className="order-last ml-auto inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                            >
+                                {leg === "return" ? <PlaneTakeoff className="h-3.5 w-3.5" /> : <PlaneLanding className="h-3.5 w-3.5" />}
+                                {leg === "return" ? "Voir les vols aller" : "Voir les vols retour"}
+                            </button>
+                        )}
                         {legParams[leg].origin && legParams[leg].destination && (
                             <span>
                                 {placeLabel(legParams[leg].origin)} → {placeLabel(legParams[leg].destination)}
@@ -504,6 +672,22 @@ export default function TransportTab({ trip }) {
                             </span>
                         )}
                     </h3>
+
+                    {!direct && comparators.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+                            <span className="mr-1 text-xs font-bold uppercase tracking-wide text-slate-500">Comparer ce trajet sur</span>
+                            {comparators.map((link) => (
+                                <button
+                                    key={link.key}
+                                    type="button"
+                                    onClick={() => partner.open(link.url, { kind: "flight", title: `${placeLabel(legParams[leg].origin)} → ${placeLabel(legParams[leg].destination)}`, provider: link.label, origin: placeLabel(legParams[leg].origin), destination: placeLabel(legParams[leg].destination), starts_at: legParams[leg].date ? `${legParams[leg].date}T08:00` : "", travelers: passengers })}
+                                    className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm transition hover:-translate-y-0.5 ${link.color}`}
+                                >
+                                    {link.label} <ExternalLink className="h-3 w-3" />
+                                </button>
+                            ))}
+                        </div>
+                    )}
 
                     {errors[leg] && (
                         <p className="flex items-start gap-2 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-950/30 dark:text-rose-300">
@@ -516,7 +700,24 @@ export default function TransportTab({ trip }) {
                             key={results[leg].key}
                             result={results[leg]}
                             onSelect={leg === "return" ? selectReturn : selectOutbound}
+                            onPartner={openOffer}
                             actionLabel={leg === "return" ? "Choisir ce retour" : roundtrip ? "Choisir cet aller" : "Choisir ce vol"}
+                            date={legParams[leg].date}
+                            onDateChange={(date) => {
+                                setDates((current) => ({ ...current, [leg]: date }));
+                                search(leg, date);
+                            }}
+                            onSearchAll={(url) =>
+                                partner.open(url, {
+                                    kind: "flight",
+                                    title: `${placeLabel(legParams[leg].origin)} → ${placeLabel(legParams[leg].destination)}`,
+                                    provider: "Aviasales",
+                                    origin: placeLabel(legParams[leg].origin),
+                                    destination: placeLabel(legParams[leg].destination),
+                                    starts_at: legParams[leg].date ? `${legParams[leg].date}T08:00` : "",
+                                    travelers: passengers,
+                                })
+                            }
                         />
                     )}
                     {!loading[leg] && !results[leg] && !errors[leg] && leg === "outbound" && (
@@ -527,7 +728,7 @@ export default function TransportTab({ trip }) {
                 </section>
             )}
 
-            {step === "review" && selection.outbound && (
+            {mode === "flight" && step === "review" && selection.outbound && (
                 <section className="grid gap-5 lg:grid-cols-[1fr_22rem]">
                     <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
                         <h3 className="font-black text-slate-900 dark:text-white">Bagages et conditions de vos billets</h3>
@@ -594,6 +795,15 @@ export default function TransportTab({ trip }) {
                     </aside>
                 </section>
             )}
+
+            <TripReservations
+                trip={trip}
+                kinds={TRANSPORT_KINDS}
+                title="Mes billets"
+                accent="text-sky-700 dark:text-sky-300"
+                empty="Aucun billet enregistré. Après un achat chez un partenaire, retrouvez-le ici avec sa référence."
+            />
+            {partner.element}
 
             <section className="space-y-3 border-t border-slate-200 pt-6 dark:border-slate-700">
                 <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Trajets du voyage</h3>

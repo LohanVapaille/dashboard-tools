@@ -20,6 +20,15 @@ class LiteApiClient
         return (bool) config('stays.providers.liteapi.key') && (bool) config('stays.providers.liteapi.enabled');
     }
 
+    /** Mode partenaires avec paiement intégré : Nuitée encaisse, le site n'est pas vendeur. */
+    public static function embeddedCheckout(): bool
+    {
+        return !config('commerce.direct_booking')
+            && (bool) config('stays.providers.liteapi.embedded_checkout')
+            && (bool) config('stays.providers.liteapi.key')
+            && (bool) config('stays.providers.liteapi.enabled');
+    }
+
     public function sandbox(): bool
     {
         return str_starts_with((string) config('stays.providers.liteapi.key'), 'sand_');
@@ -38,6 +47,11 @@ class LiteApiClient
             'includeHotelData' => $withHotelData,
         ];
 
+        // Paiement intégré Nuitée : la marge configurée est la commission reversée au site.
+        if (self::embeddedCheckout() && config('stays.providers.liteapi.margin') !== null) {
+            $body['margin'] = (float) config('stays.providers.liteapi.margin');
+        }
+
         $body += $hotelIds
             ? ['hotelIds' => array_values($hotelIds)]
             : [
@@ -52,6 +66,28 @@ class LiteApiClient
         return $this->send(fn (PendingRequest $http) => $http->timeout(30)->post($this->api('/hotels/rates'), $body))->json();
     }
 
+    /**
+     * Annuaire d'hôtels autour d'un point (photo, note, étoiles), sans prix ni réservation : gratuit.
+     * Sert à illustrer l'annuaire OpenStreetMap, qui n'a presque jamais de photos. Cache d'une semaine.
+     */
+    public function hotelsNear(float $latitude, float $longitude, float $radiusKm): array
+    {
+        if (!(bool) config('stays.providers.liteapi.key')) {
+            return [];
+        }
+
+        $key = sprintf('liteapi.near.%.3f.%.3f.%d', $latitude, $longitude, (int) ceil($radiusKm));
+
+        return Cache::remember($key, now()->addWeek(), fn () => rescue(fn () => $this->send(
+            fn (PendingRequest $http) => $http->timeout(15)->get($this->api('/data/hotels'), [
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'radius' => (int) (min(25, max(1, $radiusKm)) * 1000),
+                'limit' => 300,
+            ]),
+        )->json('data', []), [], false));
+    }
+
     /** Fiche de l'hôtel (photos, équipements, description) : change peu, cache d'un jour. */
     public function hotel(string $hotelId): array
     {
@@ -60,10 +96,11 @@ class LiteApiClient
         )->json('data', []));
     }
 
-    public function prebook(string $offerId): array
+    /** Avec $paymentSdk, la réponse contient secretKey et transactionId pour le module de paiement Nuitée. */
+    public function prebook(string $offerId, bool $paymentSdk = false): array
     {
         return $this->send(
-            fn (PendingRequest $http) => $http->timeout(30)->post($this->bookingUrl('/rates/prebook'), ['offerId' => $offerId, 'usePaymentSdk' => false]),
+            fn (PendingRequest $http) => $http->timeout(30)->post($this->bookingUrl('/rates/prebook'), ['offerId' => $offerId, 'usePaymentSdk' => $paymentSdk]),
             'Cette chambre n’est plus disponible à ce tarif. Choisissez une autre offre.',
         )->json('data', []);
     }

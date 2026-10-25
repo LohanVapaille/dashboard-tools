@@ -49,6 +49,12 @@ class User extends Authenticatable
         ];
     }
 
+    /** Membre de l'équipe qui répond au chat d'assistance (SUPPORT_ADMIN_EMAILS). */
+    public function isSupportAgent(): bool
+    {
+        return in_array(strtolower((string) $this->email), array_map('strtolower', config('support.admins', [])), true);
+    }
+
     public function hasPremiumAccess(): bool
     {
         return in_array($this->subscription_status, ['active', 'trialing'], true)

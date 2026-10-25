@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Activity;
 use App\Models\StayTransition;
 use App\Models\Trip;
+use App\Models\TripBudgetLine;
 use App\Models\TripBudgetMember;
 use App\Models\TripExpense;
 use App\Services\Budget\TripBudget;
@@ -37,20 +38,63 @@ class BudgetController extends Controller
     public function updatePlanned(Request $request, Trip $trip)
     {
         $validated = $request->validate([
-            'type' => ['required', 'in:activity,stay,transition'],
-            'id' => ['required', 'integer'],
+            'type' => ['required', 'in:activity,stay,transition,estimate,custom'],
+            'id' => ['nullable', 'integer', 'required_unless:type,estimate'],
+            'key' => ['nullable', 'string', 'in:estimate-flight-out,estimate-flight-back', 'required_if:type,estimate'],
             'amount' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
+            'label' => ['nullable', 'string', 'max:191'],
         ]);
 
         $amount = $validated['amount'];
 
         match ($validated['type']) {
+            // Estimation de vol : le montant saisi (par personne) remplace l'estimation Aviasales.
+            'estimate' => TripBudgetLine::updateOrCreate(['trip_id' => $trip->id, 'key' => $validated['key']], ['group' => 'transport', 'amount' => $amount, 'per_person' => true]),
+            'custom' => TripBudgetLine::where('trip_id', $trip->id)->whereNull('key')->findOrFail($validated['id'])
+                ->update(array_filter(['amount' => $amount, 'label' => $validated['label'] ?? null], fn ($value) => $value !== null) + ['amount' => $amount]),
             'activity' => Activity::whereKey($validated['id'])
                 ->whereHas('day.stay', fn ($query) => $query->where('trip_id', $trip->id))
                 ->firstOrFail()->update(['price' => $amount]),
             'stay' => $trip->stays()->findOrFail($validated['id'])->update(['accommodation_cost' => $amount]),
             'transition' => StayTransition::where('trip_id', $trip->id)->findOrFail($validated['id'])->update(['cost' => $amount]),
         };
+
+        return $this->summary($trip);
+    }
+
+    /** Ligne ajoutée à la main au prévisionnel (assurance, visa, matériel…). */
+    public function storeLine(Request $request, Trip $trip)
+    {
+        $validated = $request->validate([
+            'label' => ['required', 'string', 'max:191'],
+            'amount' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
+            'group' => ['required', Rule::in(TripBudgetLine::GROUPS)],
+            'per_person' => ['boolean'],
+        ]);
+        abort_if(TripBudgetLine::where('trip_id', $trip->id)->whereNull('key')->count() >= 100, 422, 'Trop de lignes ajoutées sur ce voyage.');
+        TripBudgetLine::create(['trip_id' => $trip->id, 'key' => null, ...$validated]);
+
+        return $this->summary($trip);
+    }
+
+    /** Retire une ligne du prévisionnel : supprimée si ajoutée à la main, masquée si calculée depuis le voyage. */
+    public function hideLine(Request $request, Trip $trip)
+    {
+        $key = $request->validate(['key' => ['required', 'string', 'max:60', 'regex:/^[a-z-]+(-\d+)?$/']])['key'];
+
+        if (preg_match('/^custom-(\d+)$/', $key, $match)) {
+            TripBudgetLine::where('trip_id', $trip->id)->whereNull('key')->whereKey((int) $match[1])->delete();
+        } else {
+            TripBudgetLine::updateOrCreate(['trip_id' => $trip->id, 'key' => $key], ['hidden' => true]);
+        }
+
+        return $this->summary($trip);
+    }
+
+    /** Rétablit toutes les lignes calculées masquées. */
+    public function restoreLines(Trip $trip)
+    {
+        TripBudgetLine::where('trip_id', $trip->id)->whereNotNull('key')->update(['hidden' => false]);
 
         return $this->summary($trip);
     }
@@ -87,6 +131,11 @@ class BudgetController extends Controller
 
     public function storeExpense(Request $request, Trip $trip)
     {
+        abort_if(
+            !$trip->hasPremium($request->user()) && $trip->expenses()->count() >= Trip::FREE_EXPENSE_LIMIT,
+            403,
+            'La version gratuite permet ' . Trip::FREE_EXPENSE_LIMIT . ' dépenses par voyage. Passez à Premium pour des dépenses illimitées.'
+        );
         $data = $this->validateExpense($request, $trip);
 
         DB::transaction(function () use ($trip, $data) {
@@ -131,6 +180,7 @@ class BudgetController extends Controller
             'spent_on' => ['nullable', 'date'],
             'paid_by' => ['required', 'integer', Rule::in($memberIds)],
             'split_mode' => ['required', 'in:equal,amounts'],
+            'planned_key' => ['nullable', 'string', 'max:60'],
             'shares' => ['required', 'array', 'min:1', 'max:30'],
             'shares.*.member_id' => ['required', 'integer', 'distinct', Rule::in($memberIds)],
             'shares.*.amount' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
@@ -163,6 +213,7 @@ class BudgetController extends Controller
                 'split_mode' => $validated['split_mode'],
                 'spent_on' => $validated['spent_on'] ?? null,
                 'paid_by' => $validated['paid_by'],
+                'planned_key' => $validated['planned_key'] ?? null,
             ],
             'shares' => $shares->values()->map(fn ($share, $index) => [
                 'trip_budget_member_id' => $share['member_id'],

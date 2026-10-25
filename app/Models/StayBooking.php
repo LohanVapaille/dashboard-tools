@@ -29,6 +29,11 @@ class StayBooking extends Model
         ];
     }
 
+    public function trip(): BelongsTo
+    {
+        return $this->belongsTo(Trip::class);
+    }
+
     public function order(): BelongsTo
     {
         return $this->belongsTo(StayOrder::class, 'stay_order_id');

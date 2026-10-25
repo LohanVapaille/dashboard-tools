@@ -100,7 +100,9 @@ Règles pour les séjours :
 - transport_from_previous décrit le trajet depuis l’étape précédente (null pour le premier séjour) : mode parmi car, train, flight, bus, ferry ; duration_minutes ; cost = coût total estimé pour le groupe en euros.
 
 Règles pour les activités :
-- Activités réalistes, variées et situées dans la ville du séjour, en tenant compte des centres d’intérêt et des activités déjà prévues (ne les répète pas).
+- Activités réalistes, variées et situées dans la ville du séjour, en tenant compte des centres d’intérêt.
+- Ne propose JAMAIS une activité déjà prévue ("existing_activities", tous jours confondus), même reformulée : « Canyon de Charyn » et « Randonnée au canyon de Charyn » sont la même sortie. Un même lieu n’apparaît qu’une fois dans tout le voyage, et jamais deux fois le même jour.
+- Si un jour a déjà des activités, complète seulement les moments libres de ce jour.
 - Au maximum 3 activités par jour. Le jour d’un changement d’étape, reste léger (le trajet prend du temps).
 - price = estimation du prix PAR PERSONNE en euros (0 si gratuit, null si inconnu). Ne prétends pas connaître les horaires, prix ou disponibilités exacts.
 - source_url doit être null sauf si tu es certain de l’URL officielle.

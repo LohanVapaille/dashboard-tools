@@ -34,6 +34,19 @@ class MajorCities
         return null;
     }
 
+    /** Pays d'un lieu au format « Ville, Région, Pays » (dernier segment), ou désigné directement. */
+    public function countryOfPlace(?string $placeName): ?array
+    {
+        $segments = array_values(array_filter(array_map('trim', explode(',', (string) $placeName))));
+        foreach (array_unique([end($segments) ?: '', $segments[0] ?? '']) as $segment) {
+            if ($segment !== '' && ($country = $this->country($segment))) {
+                return ['code' => $country['code'], 'name' => $country['name'], 'slug' => $country['slug']];
+            }
+        }
+
+        return null;
+    }
+
     /** Grandes villes autour d'un point (région, massif, parc…), les plus peuplées d'abord. */
     public function nearby(float $latitude, float $longitude, int $limit = 6, float $maxKm = 250): array
     {
@@ -70,7 +83,8 @@ class MajorCities
         $cities = array_map(fn ($row) => self::city($row, $country['name']), $country['cities']);
         usort($cities, fn ($a, $b) => $b['population'] <=> $a['population']);
 
-        return ['code' => $code, 'name' => $country['name'], 'cities' => $cities];
+        // slug : nom anglais du pays (« iceland »), utilisé par les liens des partenaires eSIM.
+        return ['code' => $code, 'name' => $country['name'], 'slug' => str_replace(' ', '-', $country['aliases'][0] ?? strtolower($code)), 'cities' => $cities];
     }
 
     private static function city(array $row, string $countryName): array

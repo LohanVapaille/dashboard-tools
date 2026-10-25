@@ -8,7 +8,7 @@ class TripExpense extends Model
 {
     public const CATEGORIES = ['activite', 'logement', 'transport', 'repas', 'courses', 'autre'];
 
-    protected $fillable = ['trip_id', 'paid_by', 'title', 'category', 'amount', 'split_mode', 'spent_on'];
+    protected $fillable = ['trip_id', 'planned_key', 'paid_by', 'title', 'category', 'amount', 'split_mode', 'spent_on'];
 
     protected $casts = [
         'amount' => 'decimal:2',

@@ -33,6 +33,7 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'auth' => [
                 'user' => $request->user(),
+                'support_agent' => (bool) $request->user()?->isSupportAgent(),
             ],
             'flash' => [
                 'status' => fn () => $request->session()->get('status'),
@@ -40,13 +41,23 @@ class HandleInertiaRequests extends Middleware
             'legal' => fn () => [
                 'company' => config('legal.company'),
                 'consent_days' => config('legal.consent_days'),
-                'affiliate_enabled' => (bool) config('flights.providers.travelpayouts.drive'),
+                'affiliate_enabled' => (bool) config('flights.providers.travelpayouts.drive') || (bool) config('commerce.activities.getyourguide_partner_id'),
             ],
             // Script d'affiliation Travelpayouts : chargé seulement après consentement, sur les pages à liens partenaires.
             'affiliate' => fn () => [
-                'drive_script' => config('flights.providers.travelpayouts.drive') && ($marker = config('flights.providers.travelpayouts.marker'))
-                    ? 'https://tpembars.com/' . base64_encode((string) $marker) . '.js?t=' . rawurlencode((string) $marker)
+                'marker' => config('flights.providers.travelpayouts.marker'),
+                'project_id' => config('flights.providers.travelpayouts.project_id'),
+                // Le script Drive est propre au projet Travelpayouts (et non au Partner ID).
+                'drive_script' => config('flights.providers.travelpayouts.drive')
+                    && ($project = config('flights.providers.travelpayouts.project_id') ?: config('flights.providers.travelpayouts.marker'))
+                    ? 'https://tpembars.com/' . base64_encode((string) $project) . '.js?t=' . rawurlencode((string) $project)
                     : null,
+            ],
+            'commerce' => fn () => [
+                'direct_booking' => (bool) config('commerce.direct_booking'),
+                // Hôtels : cart (panier Stripe), embedded (paiement Nuitée dans la page) ou null (liens partenaires).
+                'stay_checkout' => app(\App\Services\Stays\StayProviders::class)->checkoutMode(),
+                'activities' => array_filter(config('commerce.activities', [])),
             ],
             'cart' => fn () => [
                 'count' => $request->user()
