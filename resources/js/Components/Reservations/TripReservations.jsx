@@ -1,7 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { router } from "@inertiajs/react";
-import { CalendarDays, Copy, ExternalLink, MapPin, Pencil, Plus, Trash2, Users } from "lucide-react";
+import { CalendarDays, Copy, ExternalLink, MapPin, Pencil, PencilLine, Plus, Trash2, Users } from "lucide-react";
 import { KIND_META } from "@/Components/Reservations/kinds";
 import { useTripPermissions } from "@/Contexts/TripPermissionsContext";
 import ReservationModal, { TICKET_FIELDS } from "@/Components/Reservations/ReservationModal";
@@ -24,6 +24,29 @@ export function usePartnerBooking(trip, kinds) {
     const element = prompt ? <ReservationModal trip={trip} draft={prompt} prompt kinds={kinds} onClose={() => setPrompt(null)} /> : null;
 
     return { open, element };
+}
+
+/**
+ * Bouton bien visible pour saisir à la main une réservation faite ailleurs (en agence, sur un autre site…).
+ * Pensé pour l'en-tête coloré des onglets Transport et Logement.
+ */
+export function ManualReservationButton({ trip, kinds, label = "Ajouter une réservation manuellement", className = "text-slate-800" }) {
+    const { canEdit } = useTripPermissions();
+    const [open, setOpen] = useState(false);
+    if (!canEdit) return null;
+
+    return (
+        <>
+            <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className={`inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-black shadow-lg ring-2 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-xl ${className}`}
+            >
+                <PencilLine className="h-4 w-4" /> {label}
+            </button>
+            {open && <ReservationModal trip={trip} draft={{ kind: kinds[0] }} kinds={kinds} onClose={() => setOpen(false)} />}
+        </>
+    );
 }
 
 function ReservationCard({ reservation, canEdit, onEdit, onDelete }) {

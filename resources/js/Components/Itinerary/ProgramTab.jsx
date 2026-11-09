@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { router } from "@inertiajs/react";
-import { CalendarDays, ChevronsDownUp, ChevronsUpDown, Crown, Eraser, FileDown, LoaderCircle, MapPin, Moon, Plus, Sparkles, Ticket } from "lucide-react";
+import { CalendarDays, ChevronsDownUp, ChevronsUpDown, Crown, Eraser, FileDown, LoaderCircle, MapPin, Moon, Plus, Route, Sparkles, Ticket } from "lucide-react";
+import ReorderStaysModal from "@/Components/Itinerary/ReorderStaysModal";
 import { DAYS_TOGGLE_EVENT } from "@/Components/Itinerary/DayCard";
 import { confirmDialog, notify } from "@/Components/ConfirmDialog";
 import StayCard, { STAY_PALETTE } from "@/Components/Itinerary/StayCard";
@@ -21,6 +22,7 @@ export default function ProgramTab({ trip, canEdit, onOpenAI, onOpenAddStay, onE
     const scrollTo = (id) => document.getElementById(`stay-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
     const toggleDays = (open) => window.dispatchEvent(new CustomEvent(DAYS_TOGGLE_EVENT, { detail: { open } }));
     const [clearing, setClearing] = useState(false);
+    const [reordering, setReordering] = useState(false);
 
     const clearProgram = async () => {
         const confirmed = await confirmDialog({
@@ -43,6 +45,7 @@ export default function ProgramTab({ trip, canEdit, onOpenAI, onOpenAddStay, onE
 
     return (
         <div className="space-y-6">
+            {reordering && <ReorderStaysModal show trip={trip} onClose={() => setReordering(false)} />}
             <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-500 via-violet-600 to-purple-700 p-6 text-white shadow-xl shadow-violet-500/20">
                 <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/15 blur-2xl" />
                 <div className="pointer-events-none absolute -bottom-20 left-10 h-48 w-48 rounded-full bg-fuchsia-300/20 blur-2xl" />
@@ -62,6 +65,11 @@ export default function ProgramTab({ trip, canEdit, onOpenAI, onOpenAddStay, onE
                         {canEdit && (
                             <button onClick={onOpenAddStay} className="inline-flex items-center gap-2 rounded-xl bg-white/20 px-4 py-2.5 text-sm font-bold text-white backdrop-blur transition hover:bg-white/30">
                                 <Plus className="h-4 w-4" /> Ajouter une étape
+                            </button>
+                        )}
+                        {canEdit && stays.length > 1 && (
+                            <button onClick={() => setReordering(true)} className="inline-flex items-center gap-2 rounded-xl bg-white/20 px-4 py-2.5 text-sm font-bold text-white backdrop-blur transition hover:bg-white/30">
+                                <Route className="h-4 w-4" /> Réorganiser les étapes
                             </button>
                         )}
                         {stays.length > 0 && (

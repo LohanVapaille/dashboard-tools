@@ -24,7 +24,7 @@ import LocationSearchInput from "@/Components/Itinerary/LocationSearchInput";
 import StayPropertyCard from "@/Components/Stays/StayPropertyCard";
 import StayDetailModal from "@/Components/Stays/StayDetailModal";
 import StaysMap from "@/Components/Stays/StaysMap";
-import TripReservations, { usePartnerBooking } from "@/Components/Reservations/TripReservations";
+import TripReservations, { ManualReservationButton, usePartnerBooking } from "@/Components/Reservations/TripReservations";
 import { firstError, formatPrice } from "@/Utils/flights";
 import { amenityMeta, formatDay, nightsBetween, partnerMeta, typeMeta } from "@/Utils/stays";
 
@@ -392,6 +392,7 @@ export default function StaysTab({ trip }) {
                         <h2 className="flex items-center gap-2 text-2xl font-black"><BedDouble className="h-6 w-6" /> Trouver votre hébergement</h2>
                         <p className="mt-1 text-sm text-emerald-50">Hôtels, appartements, chambres d’hôtes, auberges, campings… comparés et réservables au même endroit.</p>
                     </div>
+                    <ManualReservationButton trip={trip} kinds={["stay"]} label="Ajouter un logement déjà réservé" className="text-teal-700" />
                     {stays.length > 1 && (
                         <div className="flex flex-wrap gap-2">
                             {stays.map((stay) => (

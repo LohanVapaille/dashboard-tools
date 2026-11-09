@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Trip;
 use App\Models\Stay;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class StayController extends Controller
@@ -86,6 +87,59 @@ class StayController extends Controller
         foreach ($days as $index => $day) {
             $day->update(['day_number' => $index + 1]);
         }
+
+        return back();
+    }
+
+    /**
+     * Réorganise les étapes : elles s'enchaînent dans le nouvel ordre à partir de la première date
+     * du voyage, chacune garde son nombre de nuits et ses journées (activités comprises) suivent.
+     * Les trajets qui ne relient plus deux étapes consécutives sont supprimés.
+     */
+    public function reorder(Request $request, Trip $trip)
+    {
+        $stays = $trip->stays()->orderBy('arrival_date')->orderBy('departure_date')->get();
+
+        $validated = $request->validate([
+            'stays' => ['required', 'array', 'size:' . $stays->count()],
+            'stays.*' => ['required', 'integer', 'distinct'],
+        ]);
+
+        $order = array_map('intval', $validated['stays']);
+        abort_unless(
+            collect($order)->sort()->values()->all() === $stays->pluck('id')->sort()->values()->all(),
+            422,
+            'La liste des étapes ne correspond pas au voyage.'
+        );
+
+        $byId = $stays->keyBy('id');
+        $cursor = Carbon::parse($stays->first()->arrival_date)->startOfDay();
+
+        DB::transaction(function () use ($trip, $order, $byId, &$cursor) {
+            foreach ($order as $id) {
+                $stay = $byId[$id];
+                $arrival = Carbon::parse($stay->arrival_date)->startOfDay();
+                $nights = (int) $arrival->diffInDays(Carbon::parse($stay->departure_date)->startOfDay());
+                $offset = (int) $arrival->diffInDays($cursor, false);
+
+                if ($offset !== 0) {
+                    foreach ($stay->days()->get() as $day) {
+                        $day->update(['date' => Carbon::parse($day->date)->addDays($offset)->toDateString()]);
+                    }
+                    $stay->update([
+                        'arrival_date' => $cursor->toDateString(),
+                        'departure_date' => $cursor->copy()->addDays($nights)->toDateString(),
+                    ]);
+                }
+
+                $cursor = $cursor->copy()->addDays($nights);
+            }
+
+            $pairs = collect($order)->sliding(2)->map(fn ($pair) => $pair->values()->implode('-'))->all();
+            $trip->transitions()->get()
+                ->reject(fn ($transition) => in_array("{$transition->from_stay_id}-{$transition->to_stay_id}", $pairs, true))
+                ->each->delete();
+        });
 
         return back();
     }

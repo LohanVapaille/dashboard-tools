@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Link } from "@inertiajs/react";
-import { BedDouble, ExternalLink, Loader2, MapPin, Sparkles, Trash2, Wallet, X } from "lucide-react";
+import { BedDouble, CalendarRange, Check, ExternalLink, Loader2, MapPin, Route, SearchCheck, ShieldCheck, Sparkles, Trash2, Wallet, X } from "lucide-react";
 import { PERIODS, transportMeta } from "@/Constants/itinerary";
 import { formatDay, nightsBetween } from "@/Utils/stays";
 import { formatMoney } from "@/Utils/formatters";
@@ -17,6 +17,87 @@ const MODE_HINTS = {
     full: "Toutes les nuits ont déjà un séjour : l'IA propose des activités pour ces jours, au bon endroit.",
 };
 
+// Étapes affichées pendant la génération, avec le moment (en secondes) où elles commencent.
+const WAIT_STAGES = [
+    { at: 0, Icon: SearchCheck, label: "Analyse de votre voyage et de vos envies" },
+    { at: 5, Icon: Route, label: "Choix des étapes et des trajets" },
+    { at: 15, Icon: CalendarRange, label: "Composition des journées, activité par activité" },
+    { at: 32, Icon: Wallet, label: "Estimation des prix et du budget" },
+    { at: 50, Icon: ShieldCheck, label: "Vérification des lieux et des dates" },
+];
+
+const WAIT_TIPS = [
+    "Vous pourrez retirer chaque activité ou séjour proposé avant de l'ajouter au voyage.",
+    "Plus votre demande est précise (rythme, budget, centres d'intérêt), plus le programme est pertinent.",
+    "Les prix sont des estimations : ajustez-les ensuite dans l'onglet Budget.",
+    "Les activités proposées se placent directement dans les bonnes journées et périodes.",
+    "Un programme complet sur plusieurs étapes peut demander jusqu'à une minute ou deux.",
+];
+
+/** Panneau d'attente pendant la génération : étapes, progression estimée, temps écoulé et astuces. */
+function GenerationWait({ startedAt, onCancel }) {
+    const [now, setNow] = useState(Date.now());
+    useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), 500);
+        return () => clearInterval(timer);
+    }, []);
+
+    const elapsed = Math.max(0, (now - startedAt) / 1000);
+    // Progression estimée : avance vite au début puis ralentit, sans atteindre 100 % avant la réponse.
+    const progress = Math.min(96, Math.round(96 * (1 - Math.exp(-elapsed / 28))));
+    const current = WAIT_STAGES.reduce((found, stage, index) => (elapsed >= stage.at ? index : found), 0);
+    const tip = WAIT_TIPS[Math.floor(elapsed / 7) % WAIT_TIPS.length];
+    const clock = `${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`;
+
+    return (
+        <div className="mt-5 rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-5 dark:border-violet-900/60 dark:from-violet-950/40 dark:to-fuchsia-950/20" role="status" aria-live="polite">
+            <div className="flex items-center gap-3">
+                <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-lg shadow-violet-500/30">
+                    <span className="absolute inset-0 animate-ping rounded-2xl bg-violet-400 opacity-30" />
+                    <Sparkles className="relative h-5 w-5 animate-pulse" />
+                </span>
+                <div className="min-w-0 flex-1">
+                    <p className="font-bold text-slate-900 dark:text-white">L&apos;IA prépare votre programme…</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Cela prend généralement entre 20 secondes et 1 minute.</p>
+                </div>
+                <span className="font-mono text-sm font-bold tabular-nums text-violet-700 dark:text-violet-300">{clock}</span>
+            </div>
+
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-violet-100 dark:bg-violet-950">
+                <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+            </div>
+
+            <ol className="mt-4 space-y-2">
+                {WAIT_STAGES.map((stage, index) => {
+                    const done = index < current;
+                    const active = index === current;
+                    return (
+                        <li key={stage.label} className={`flex items-center gap-2.5 text-sm transition ${done ? "text-emerald-700 dark:text-emerald-400" : active ? "font-semibold text-slate-900 dark:text-white" : "text-slate-400"}`}>
+                            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${done ? "bg-emerald-100 dark:bg-emerald-950" : active ? "bg-violet-600 text-white" : "bg-slate-100 dark:bg-slate-800"}`}>
+                                {done ? <Check className="h-3.5 w-3.5" /> : active ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <stage.Icon className="h-3.5 w-3.5" />}
+                            </span>
+                            {stage.label}
+                        </li>
+                    );
+                })}
+            </ol>
+
+            {elapsed > 75 && (
+                <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                    C&apos;est plus long que d&apos;habitude : le service IA est sans doute très sollicité. Merci de patienter encore un peu.
+                </p>
+            )}
+
+            <div className="mt-4 flex items-end justify-between gap-3">
+                <p className="text-xs italic text-slate-500 dark:text-slate-400">💡 {tip}</p>
+                <button type="button" onClick={onCancel} className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-500 transition hover:bg-white hover:text-rose-600 dark:hover:bg-slate-800">
+                    Annuler
+                </button>
+            </div>
+        </div>
+    );
+}
+
 export default function AIItineraryModal({ trip, onClose, onStored, authenticated }) {
     const [interests, setInterests] = useState("");
     const [stays, setStays] = useState([]);
@@ -25,6 +106,8 @@ export default function AIItineraryModal({ trip, onClose, onStored, authenticate
     const [storing, setStoring] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+    const [startedAt, setStartedAt] = useState(null);
+    const abortRef = useRef(null);
     const travelers = trip.travelers || 1;
 
     const mode = useMemo(() => {
@@ -52,20 +135,30 @@ export default function AIItineraryModal({ trip, onClose, onStored, authenticate
     const activityCount = stays.reduce((sum, stay) => sum + stay.days.reduce((count, day) => count + day.activities.length, 0), 0);
     const newStays = stays.filter((stay) => stay.is_new).length;
 
+    // Fermer la fenêtre pendant la génération abandonne la requête.
+    useEffect(() => () => abortRef.current?.abort(), []);
+
+    const cancelGeneration = () => abortRef.current?.abort();
+
     const generate = async (event) => {
         event.preventDefault();
+        const controller = new AbortController();
+        abortRef.current = controller;
         setLoading(true);
+        setStartedAt(Date.now());
         setError("");
         setSuccess("");
         try {
             const response = await axios.post(
                 route("trips.ai-itinerary.generate", trip.id),
                 { interests },
+                { signal: controller.signal },
             );
             setStays(response.data.stays || []);
             setReplaced(response.data.replaced || []);
             if (!response.data.stays?.length) setError("L'IA n'a rien proposé d'exploitable. Précisez votre demande puis réessayez.");
         } catch (requestError) {
+            if (axios.isCancel(requestError)) return;
             const status = requestError.response?.status;
             const serverMessage = requestError.response?.data?.message || "";
             const readableError = status === 503
@@ -83,6 +176,7 @@ export default function AIItineraryModal({ trip, onClose, onStored, authenticate
                     : readableError,
             );
         } finally {
+            if (abortRef.current === controller) abortRef.current = null;
             setLoading(false);
         }
     };
@@ -171,7 +265,7 @@ export default function AIItineraryModal({ trip, onClose, onStored, authenticate
                     </div>
                 ) : (
                 <div className="overflow-y-auto p-5">
-                    <form onSubmit={generate} className="space-y-3">
+                    <form onSubmit={generate} className={`space-y-3 ${loading ? "hidden" : ""}`}>
                         <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
                             Votre envie de voyage, vos centres d'intérêt et contraintes
                             <textarea
@@ -195,6 +289,8 @@ export default function AIItineraryModal({ trip, onClose, onStored, authenticate
                         </button>
                     </form>
 
+                    {loading && startedAt && <GenerationWait startedAt={startedAt} onCancel={cancelGeneration} />}
+
                     {error && (
                         <div className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
                             <p>{error}</p>
@@ -214,7 +310,7 @@ export default function AIItineraryModal({ trip, onClose, onStored, authenticate
                         </p>
                     )}
 
-                    {stays.length > 0 && (
+                    {!loading && stays.length > 0 && (
                         <div className="mt-6 space-y-4">
                             <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 dark:border-orange-900/50 dark:bg-orange-950/20">
                                 <p className="flex items-center gap-2 text-sm font-bold text-orange-800 dark:text-orange-200">
@@ -323,7 +419,7 @@ export default function AIItineraryModal({ trip, onClose, onStored, authenticate
                 </div>
                 )}
 
-                {stays.length > 0 && (
+                {!loading && stays.length > 0 && (
                     <div className="flex items-center justify-end gap-2 border-t border-slate-200 p-5 dark:border-slate-700">
                         <p className="mr-auto text-xs text-slate-500">
                             {newStays > 0 && `${newStays} séjour(s) · `}{activityCount} activité(s)

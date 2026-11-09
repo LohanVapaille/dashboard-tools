@@ -29,7 +29,7 @@ import { AirlineLogo, FlightTimeline, OfferBadges, PriceBreakdown } from "@/Comp
 import BaggageSelector, { baggagePayload, baggageTotal } from "@/Components/Flights/BaggageSelector";
 import { firstError, formatPrice, localDate, placeLabel } from "@/Utils/flights";
 import { flightPartnerLinks, groundPartnerLinks } from "@/Utils/partners";
-import TripReservations, { usePartnerBooking } from "@/Components/Reservations/TripReservations";
+import TripReservations, { ManualReservationButton, usePartnerBooking } from "@/Components/Reservations/TripReservations";
 import { TRANSPORT_KINDS } from "@/Components/Reservations/kinds";
 
 const HOME_KEY = "travelplanner.flights.home";
@@ -480,6 +480,7 @@ export default function TransportTab({ trip }) {
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
+                        <ManualReservationButton trip={trip} kinds={TRANSPORT_KINDS} label="Ajouter un billet déjà réservé" className="text-indigo-700" />
                         <div className="inline-flex rounded-xl bg-white/15 p-1 backdrop-blur">
                             {[["flight", Plane, "Avion"], ["ground", TrainFront, "Train & bus"]].map(([key, Icon, label]) => (
                                 <button key={key} type="button" onClick={() => setMode(key)} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${mode === key ? "bg-white text-indigo-700 shadow" : "text-white/80 hover:text-white"}`}>

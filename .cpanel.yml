@@ -1,4 +1,4 @@
 deployment:
   tasks:
-    - export DeploymentPath=/home/vapaille/public_html/travelsplanner
+    - export DeploymentPath=/home/vapaille/lovatrip.com
     - /bin/cp -R * $DeploymentPath

@@ -293,7 +293,7 @@ function ShowContent({ trip }) {
                     {!isPublicView && <TripNotes trip={trip} />}
 
                     <div className="bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <TripMap stays={trip.stays || []} />
+                        <TripMap stays={trip.stays || []} origin={trip.origin_name && trip.origin_latitude && trip.origin_longitude ? { name: trip.origin_name, latitude: trip.origin_latitude, longitude: trip.origin_longitude } : null} />
                     </div>
 
                     <div className="flex flex-wrap items-end gap-1 border-b border-slate-200 dark:border-slate-700">

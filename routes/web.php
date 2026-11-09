@@ -267,6 +267,7 @@ Route::middleware('check.trip.access:edit')->group(function () {
     Route::delete('/trips/{trip}/reservations/{reservation}', [TripReservationController::class, 'destroy'])->scopeBindings()->name('trips.reservations.destroy');
 
     Route::post('/trips/{trip}/stays', [StayController::class, 'store'])->name('stays.store');
+    Route::patch('/trips/{trip}/stays/order', [StayController::class, 'reorder'])->name('stays.reorder');
     Route::put('/stays/{stay}', [StayController::class, 'update'])->name('stays.update');
     Route::delete('/stays/{stay}', [StayController::class, 'destroy'])->name('stays.destroy');
 
